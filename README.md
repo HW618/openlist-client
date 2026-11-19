@@ -79,6 +79,10 @@ To release: set `version` in `nsgo.yaml`, then publish a release tagged `v<versi
 
 Setup, once: install the [instabox GitHub App](https://instabox.sh/docs/use-cases/ci) for this repository (the dashboard's CI page, *Connect GitHub*); jobs with `runs-on: instabox-medium` wait in the queue until it is.
 
+## Roadmap
+
+Planned work, with a feasibility assessment of each item, is in [ROADMAP.md](ROADMAP.md) (in Chinese).
+
 ## Acknowledgements
 
 - [NSGo](https://nsgo.dev/) is the Go UI engine this app is built on: one Go codebase, drawn with each platform's native views, with its tooling for testing, packaging and secure storage. Thank you to the NSGo authors.
