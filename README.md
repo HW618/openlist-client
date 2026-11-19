@@ -40,6 +40,7 @@ By default files go to the system's Downloads folder, in an `OpenList` subfolder
 | `src/internal/access/` | Classifies failures into permission problems |
 | `src/locales/` | `en.yaml` and `zh-Hans.yaml` catalogs; `catalog_gen.go` is generated |
 | `src/theme/` | The theme (`openlist.yaml`) and its loader |
+| `.github/workflows/` | `release.yml`: builds and publishes the clients when a release is published |
 | `design/prototype/` | The Open Design HTML prototype of the app |
 | `design/icon/` | App icon sources and the OpenList logo it is made from |
 
@@ -61,6 +62,22 @@ go tool nsgo build -target macos_arm64   # one target; add -installers=false to 
 Run the `go tool nsgo` commands rather than `go build` or `go test` directly: they type-check, generate the locale catalogs and vet every target.
 
 The prototype is a single file: open `design/prototype/index-v0.0.1.html` in a browser (`?platform=desktop|web|android`, `?perm=folder,network,server,browser`).
+
+## Releases
+
+Publishing a release on GitHub runs [`.github/workflows/release.yml`](.github/workflows/release.yml), which builds the clients and adds them to that release:
+
+| Client | Files | Built on |
+| --- | --- | --- |
+| Android (arm64) | `.apk` | [InstaBox](https://instabox.sh/) |
+| Windows (x64) | `-setup.exe` installer | InstaBox |
+| Linux (amd64) | `.deb`, `.pkg.tar.gz`, `.AppImage` | InstaBox |
+| Linux (arm64) | `.deb`, `.pkg.tar.gz`, `.AppImage` | InstaBox |
+| macOS (arm64, x64) | `.dmg` | GitHub's `macos-latest` runner: macOS packaging needs Xcode, which InstaBox's Linux machines do not have |
+
+To release: set `version` in `nsgo.yaml`, then publish a release tagged `v<version>` (version `0.1.0` is tag `v0.1.0`); the workflow stops if they differ. The packages are not signed with a store or developer certificate: the APK carries the debug key, and macOS and Windows may warn on first start.
+
+Setup, once: install the [instabox GitHub App](https://instabox.sh/docs/use-cases/ci) for this repository (the dashboard's CI page, *Connect GitHub*); jobs with `runs-on: instabox-medium` wait in the queue until it is.
 
 ## Acknowledgements
 
