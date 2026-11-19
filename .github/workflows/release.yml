@@ -1,0 +1,95 @@
+name: Release
+
+# Builds the clients when a release is published, and adds them to it.
+# Tag the release v<version>, the version in nsgo.yaml: v0.1.0 for version 0.1.0.
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write # uploads the packages to the release
+
+env:
+  TAG: ${{ github.event.release.tag_name }}
+  GH_TOKEN: ${{ github.token }}
+
+jobs:
+  # Android, Windows and Linux (amd64 and arm64) build on InstaBox machines: NSGo
+  # needs only Go for them, and Go cross-compiles. instabox-medium is an Ubuntu 24.04
+  # machine, made for the job and deleted after it. It needs the instabox GitHub App
+  # installed for this repository (see README).
+  build:
+    name: ${{ matrix.name }}
+    runs-on: instabox-medium
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: Android arm64, target: android_arm64 }
+          - { name: Windows x64, target: windows_x64, nsis: true }
+          - { name: Linux x64 (amd64), target: linux_x64 }
+          - { name: Linux arm64, target: linux_arm64 }
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ env.TAG }}
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      - name: The tag matches the version in nsgo.yaml
+        run: |
+          version=$(sed -n 's/^version:[[:space:]]*//p' nsgo.yaml | head -n 1 | tr -d "\"' ")
+          if [ "v$version" != "$TAG" ]; then
+            echo "::error::The release is tagged $TAG but nsgo.yaml says version $version; the packages are named after the version."
+            exit 1
+          fi
+
+      # The Windows installer is compiled by NSIS; without it the build leaves only its script.
+      - name: Install NSIS
+        if: matrix.nsis
+        run: |
+          sudo=""; [ "$(id -u)" -eq 0 ] || sudo="sudo"
+          $sudo apt-get update
+          $sudo apt-get install -y nsis
+
+      - name: Build
+        run: go tool nsgo build -target ${{ matrix.target }}
+
+      - name: Add the packages to the release
+        run: |
+          find dist/releases -maxdepth 1 -type f ! -name '.*' -print0 \
+            | xargs -0 gh release upload "$TAG" --clobber
+
+  # macOS needs Xcode, to compile and package and for the disk image, which an
+  # InstaBox machine, being Linux, cannot have: this job runs on GitHub's own macOS runner.
+  build-macos:
+    name: macOS (arm64 and x64)
+    runs-on: macos-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ env.TAG }}
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      - name: The tag matches the version in nsgo.yaml
+        run: |
+          version=$(sed -n 's/^version:[[:space:]]*//p' nsgo.yaml | head -n 1 | tr -d "\"' ")
+          if [ "v$version" != "$TAG" ]; then
+            echo "::error::The release is tagged $TAG but nsgo.yaml says version $version; the packages are named after the version."
+            exit 1
+          fi
+
+      - name: Build
+        run: go tool nsgo build -target macos_arm64,macos_x64
+
+      - name: Add the packages to the release
+        run: |
+          find dist/releases -maxdepth 1 -type f ! -name '.*' -print0 \
+            | xargs -0 gh release upload "$TAG" --clobber
