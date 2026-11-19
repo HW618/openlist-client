@@ -1,0 +1,95 @@
+# Build output and packages
+/dist/
+/openlist-client
+/openlist-client.exe
+*.dmg
+*.apk
+*.aab
+*.ipa
+*.app
+*.exe
+*.wasm
+
+# nsgo generated files: dev builds, test output, platform build files
+/.nsgo/
+
+# Secrets and credentials: never commit these
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.crt
+*.cer
+*.p12
+*.pfx
+*.p8
+*.jks
+*.keystore
+*.mobileprovision
+*.provisionprofile
+*.token
+secrets/
+credentials*.json
+service-account*.json
+google-services.json
+GoogleService-Info.plist
+# the app's own sealed login files (see src/internal/store)
+tokens.enc
+tokens.json
+# signing settings with real passwords (nsgo.yaml holds only the key's path)
+nsgo.local.yaml
+*.local.yaml
+
+# Go
+*.test
+*.out
+coverage.*
+go.work
+go.work.sum
+vendor/
+
+# Logs and temporary files
+*.log
+*.tmp
+*.swp
+*.bak
+.cache/
+
+# OS files
+.DS_Store
+._*
+.Spotlight-V100
+.Trashes
+Thumbs.db
+Desktop.ini
+
+# Editors and IDEs
+.idea/
+.vscode/
+.fleet/
+*.iml
+*.sublime-project
+*.sublime-workspace
+.vim/
+.netrwhist
+
+# AI assistant and agent tooling state (local only)
+.cursor/
+.cursorignore
+.agy-staff/
+.claude/
+.codex/
+.aider*
+.continue/
+.windsurf/
+.kiro/
+CLAUDE.local.md
+AGENTS.local.md
+
+# Mobile / native build state
+local.properties
+.gradle/
+Pods/
+xcuserdata/
+DerivedData/

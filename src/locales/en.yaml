@@ -1,0 +1,349 @@
+appName:
+  message: OpenList
+  description: The app's name, which its packages list it under in each language.
+
+# Tabs
+tabFiles: Files
+tabTransfers: Transfers
+tabSettings: Settings
+tabLabel: Main navigation
+
+# Files page: header
+siteSwitchLabel: Switch OpenList site
+newOrUploadLabel: New or upload
+refreshDirLabel: Refresh this folder
+noSiteName: No site
+
+# Files page: search and toolbar
+searchPlaceholder: Search file names or storage folders...
+searchLabel: Search files
+clearSearchLabel: Clear search
+scopeLabel: Search scope
+scopeCurrent: This folder
+scopeGlobal: Everywhere
+sortName: Name
+sortSize: Size
+sortDate: Date
+sortToggleLabel: Change the sort order
+viewToggleLabel: Switch between list and grid
+viewGridShort: Grid
+viewListShort: List
+breadcrumbLabel: Folder path
+rootName: Root
+itemsCount: "{count, plural, one {# item} other {# items}}"
+driverLabel: "Driver: {name}"
+multiStorage: Multiple storages
+folderKind: Folder
+moreActionsLabel: "More actions for {name}"
+searching: Searching...
+loading: Loading...
+loadFailed:
+  message: Could not load this folder
+  description: Title of the error shown in place of a folder's files.
+retry: Retry
+needLoginDesc: This site asks you to sign in to see this folder.
+signInAction: Sign in
+signOutAction: Sign out
+
+# Empty states
+emptyDirTitle: This folder is empty
+emptyDirDesc: Tap "+" to upload files, create a folder or start an offline download
+emptySearchTitle: No matching files
+emptySearchDesc: Try other keywords or search everywhere
+noSitesTitle: Connect your first OpenList server
+noSitesDesc: Add the address of your OpenList server to browse and manage its files from this device.
+addSiteAction: Add site
+
+# Selection and batch bar
+selectedCount: "{count, plural, one {# selected} other {# selected}}"
+selectAll: Select all
+deselectAll: Deselect all
+selectDone: Done
+batchLabel: Batch actions
+batchDownload: Download
+batchCopyLink: Copy links
+batchMove: Move
+batchDelete: Delete
+
+# Floating button and its menu
+fabLabel: Open quick actions
+fabCloseLabel: Close quick actions
+fabToggleSelect: Toggle checkboxes
+fabOffline: Offline download
+fabNewFile: New file
+fabMkdir: New folder
+fabUpload: Upload files
+fabRefresh: Refresh folder
+
+# Toasts
+toastRefreshed: Folder refreshed
+toastEnteredSelect: Selection mode on
+toastFoldersNoDownload: Folders can't be downloaded directly yet
+toastDownloadQueued: "{count, plural, one {# file added to the download queue} other {# files added to the download queue}}"
+toastLinksCopied: "{count, plural, one {# link copied} other {# links copied}}"
+toastMountNoMove: Storage roots can't be moved
+toastMountNoDelete: Storage roots can't be deleted
+toastMoved: "{count, plural, one {# item moved to \"{folder}\"} other {# items moved to \"{folder}\"}}"
+toastDeleted: "{count, plural, one {# item deleted} other {# items deleted}}"
+toastSkippedMounts: (Storage roots were skipped)
+toastFolderCreated: "Created folder \"{name}\""
+toastFileCreated: "Created file \"{name}\""
+toastRenamed: Renamed
+toastUploadQueued: "{count, plural, one {# file added to the upload queue} other {# files added to the upload queue}}"
+toastOfflineAdded: "Offline task added (saving to {dir})"
+toastSwitchedSite: "Switched to {name}"
+toastSiteRemoved: Site removed
+toastSiteConnected: "Connected to {name}"
+toastCacheCleared: Local cache cleared
+toastLinkCopied: "Copied the link of {name}"
+toastSiteOk: "{name} is reachable ({latency})"
+toastSiteFail: "{name} did not answer"
+toastFilesDir: "Files page folder set to {dir}"
+toastOfflineDir: "Offline download folder set to {dir}"
+toastLocalDir: "Downloads on this device go to {dir}"
+toastRetrying: "Retrying {name}"
+toastNoDone: No finished tasks
+toastClearedDone: Finished tasks cleared
+toastOfflineCleared: Finished offline tasks cleared
+toastSignedIn: Signed in
+toastSignedOut: "Signed out of {name}; the login saved on this device is deleted"
+toastError: "{message}"
+toastNoSite: Add a site first
+toastNothingToUpload: No files were chosen
+
+# Actions sheet
+actionOpenDir: Open folder
+actionPreview: Preview
+actionDownload: Download to this device
+actionCopyLink: Copy direct link
+actionRename: Rename
+actionDelete: Delete
+closeSheetLabel: Close panel
+
+# Sites
+siteSwitcherTitle: Switch OpenList site
+addNewSite: + Add new site
+addSiteTitle: Add OpenList site
+signInTitle: Sign in to this site
+siteNameLabel: Site name *
+siteNamePlaceholder: "For example: Studio server"
+siteNameError: Enter a site name
+siteUrlLabel: Server address *
+siteUrlPlaceholder: https://pan.example.com
+siteUrlError: Enter a valid address starting with http:// or https://
+siteTokenLabel: Access token (optional)
+siteTokenPlaceholder: ol_live_...
+siteUserLabel: Username (optional)
+siteUserPlaceholder: Used to sign in and get a token
+sitePassLabel: Password
+saveAndConnect: Save and connect
+signInFailed: "Could not sign in: {message}"
+cancel: Cancel
+siteCurrentTag: Current
+
+# Create and upload
+quickAddTitle: New or upload
+mkdirTitle: Create folder
+folderNameLabel: Folder name *
+folderNamePlaceholder: "For example: Archive"
+folderNameError: Enter a folder name
+create: Create
+newFileTitle: Create file
+fileNameLabel: File name *
+fileNamePlaceholder: "For example: notes.md or config.txt"
+fileNameError: Enter a file name
+fileBodyLabel: Initial content (optional)
+fileBodyPlaceholder: Type text or Markdown...
+createFile: Create file
+uploadTitle: Upload files
+uploadHint: Choose files on this device to add them to the upload queue of this folder.
+pickFromDevice: Choose from this device
+
+# Offline download
+offlineTitle: Add offline download task
+offlineUrlLabel: Download links (HTTP / Magnet / ED2K), one per line *
+offlineUrlPlaceholder: https://example.com/archive.tar.gz or magnet:?xt=urn:btih:...
+offlineUrlError: Enter a valid download link
+offlineToolLabel: Downloader
+offlineToolsNone: The server offers no offline downloader
+saveDirLabel: Save folder
+change: Change
+recentDirsLabel: Recently used folders
+addTask: Add task
+
+# Folder picker and move
+dirPickerOffline: Choose offline download folder
+dirPickerFiles: Set Files page folder
+dirPickerDefaultOffline: Set offline download folder
+dirUp: Back to parent folder
+dirEmpty: No subfolders here
+dirChosen: "Selected: {path}"
+dirNeedStorage: Open a storage or folder first
+dirSelectThis: Select this folder
+back: Back
+moveTitle: "{count, plural, one {Move # item} other {Move # items}}"
+moveHere: Move here
+moveAlready: Already in this folder
+moveTarget: "Target: {path}"
+currentTag: Current
+
+# Delete and rename
+deleteTitle: Confirm delete
+deleteBody: "Delete \"{name}\"? This can't be undone."
+deleteBatchTitle: Confirm batch delete
+deleteBatchBody: "{count, plural, one {Delete # selected item?} other {Delete # selected items?}}"
+confirmDelete: Delete
+renameTitle: Rename
+renameLabel: New name *
+renameError: Enter a name
+confirmRename: Save
+
+# Local download folder
+localDirTitle: Download folder on this device
+localDirLabel: Folder *
+localDirError: Enter a valid folder path
+localDirChoose: Choose with the system dialog
+saveSettings: Save
+
+# Transfers
+transfersTitle: Transfers
+clearDone: Clear finished
+filterLabel: Filter transfers
+filterAll: All
+filterActive: Active
+filterDone: Done
+filterFailed: Failed
+transfersEmptyTitle: No transfers yet
+transfersEmptyDesc: Download or upload files from the file list to add them to the queue
+dirUploadTag: Upload
+dirDownloadTag: Download
+uploadFailedTag: Upload failed
+downloadFailedTag: Download failed
+statusDone: Done
+statusPaused: Paused
+statusFailed: Failed
+statusWaiting: Waiting
+pause: Pause
+resume: Resume
+cancelTask: Cancel
+removeRecord: Remove record
+removeTask: Remove
+
+# Settings
+settingsTitle: Sites and settings
+groupSites: Saved OpenList sites
+groupAppearance: Appearance and browsing
+groupPaths: Folders and downloads
+groupAbout: Storage and about
+siteLatency: "{latency}"
+siteLatencyLine: "{url} · latency {latency}"
+siteTimeout: timed out
+siteChecking: checking
+testSite: Test
+switchSite: Switch
+deleteSite: Delete
+expandSites: "{count, plural, one {Show all sites (# in total)} other {Show all sites (# in total)}}"
+collapseSites: Hide site list
+darkMode: Dark mode
+darkModeDesc: Easier on the eyes at night and on OLED screens
+defaultView: Default file view
+defaultViewDesc: How a folder is laid out when you open it
+viewListFull: List view
+viewGridFull: Grid view
+defaultSort: Default sort order
+defaultSortDesc: Folders always come first
+sortByName: By name
+sortBySize: By size
+sortByDate: By date
+filesDirTitle: Files page folder
+filesDirDesc: Where the app opens, and where it goes when you switch site
+offlineDirTitle: Offline download folder
+offlineDirDesc: Where offline downloads started from the root are saved
+localDirSettingTitle: Download folder on this device
+localDirSettingDesc: Defaults to the system Downloads folder; tap Change to pick another
+cacheTitle: Thumbnail and folder cache
+cacheUsed: "Using {size}"
+cacheEmpty: Cache is empty
+clearCache: Clear cache
+aboutTitle: OpenList client
+aboutDesc: "Built with NSGo · version {version}"
+
+# Preview
+previewLabel: File preview
+previewBackLabel: Back to the file list
+previewDownloadLabel: Download this file
+copyDirectLink: Copy direct link
+downloadToDevice: Download to this device
+fileSize: File size
+fileModified: Modified
+previewUnsupported: This format can't be previewed online. Download it to open it.
+previewLoadFailed: Could not load this file
+previewTooLarge: This file is too large to preview as text
+previewPlay: Play
+previewPause: Pause
+previewSpeedLabel: Playback speed
+previewVideo: Video preview
+previewAudio: Audio preview
+previewSeekLabel: Playback position
+
+# Offline download tasks
+offlineTasksTitle: Offline downloads
+offlineStateWaiting: Waiting
+offlineStateRunning: Downloading
+offlineStateDone: Completed
+offlineStateCanceling: Canceling
+offlineStateCanceled: Canceled
+offlineStateFailed: Failed
+offlineStateRetry: Waiting to retry
+offlineTransferTag: Saving to storage
+offlineNeedAdmin: Sign in with an admin account to see offline download progress.
+offlineLoadError: "Couldn't load offline tasks: {message}"
+offlineRefresh: Refresh offline tasks
+offlineClearDone: Clear finished
+localDirAsk: Ask for each download
+localDirAskDesc: Choose where to save in the system's save dialog
+localDirNeedAccess: This app may not write in this folder, so downloads use the system's save dialog. Allow "All files access" in System settings › Apps › OpenList › Permissions, then try again.
+localDirNoPickerToast: This folder can't be written to. Choose another.
+saveCancelled: Save cancelled
+webTooLarge: "This file ({size}) is too large for the browser to save directly. Choose a download folder on this device in Settings, then try again."
+
+# Permissions and site checks
+accessTitle: Permissions needed
+accessIntro: The app can't do everything it needs yet.
+accessFolderTitle: Can't save to the download folder
+accessFolderDesc: "The system refused access to {dir}. Choose another folder, or allow this app to access files in System Settings."
+accessNetworkTitle: Can't connect to the network
+accessNetworkDesc: "The system blocked this app from reaching {host}. Allow network access for this app in System Settings (Local Network on macOS and iOS)."
+accessServerTitle: This account is not allowed
+accessServerDesc: "The server refused the request ({detail}). Sign in again, or ask the administrator to give this account the right."
+accessKeychainTitle: Can't keep your sign-in safely
+accessKeychainDesc: This system has no Secret Service to keep it in. Install and start GNOME Keyring or KWallet (for example sudo apt install gnome-keyring), sign in to your desktop and choose Check again. Until then your sign-in is kept only until the app closes, and is never written to disk.
+accessBrowserTitle: The browser blocked saving files
+accessBrowserDesc: "The browser did not let this page write to your device ({detail}). Allow access to the folder again, or use the browser's own download."
+accessOpenSettings: Open System Settings
+accessChooseFolder: Choose another folder
+accessAllowFolder: Allow access to the folder
+accessUseBrowserDownload: Use the browser's download
+accessSignIn: Sign in again
+accessLater: Later
+accessRecheck: Check again
+toastSettingsManual: Couldn't open System Settings from here. Open it yourself and allow this app.
+toastFolderAllowed: Access to the folder is allowed
+toastBrowserDownloadOn: Downloads now use the browser's own download
+toastAccessOk: All permissions are in place
+toastNoFolderPicker: This browser can't choose a folder to save in. Try Chrome or Edge.
+localDirNone: Not set · downloads use the browser's own download
+siteRoleAdmin: Admin
+siteRoleUser: User
+siteRoleGuest: Guest
+siteAuthOk: "Signed in as {user} · {role}"
+siteAuthGuest: Browsing as a guest
+siteNeedLogin: Not signed in
+siteAccountDisabled: "Account {user} is disabled"
+siteUnreachable: Can't connect
+toastSiteAuthOk: "{name}: signed in as {user} ({latency})"
+toastSiteGuest: "{name}: reachable, browsing as a guest ({latency})"
+toastSiteNeedLogin: "{name}: not signed in, or the sign-in expired. Sign in again."
+toastSiteDisabled: "{name}: the account {user} is disabled"
+toastSiteFailReason: "{name}: can't connect ({reason})"
+siteStatusLine: "{url} · {status}"

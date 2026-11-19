@@ -1,0 +1,39 @@
+name: openlist-client
+id: dev.nsgo.openlistclient
+version: 0.1.0
+
+# The language catalogs, relative to this file.
+i18n:
+  dir: src/locales
+
+# macOS and iOS use an .icon or, on macOS, an .icns; the other targets, and
+# Apple ones without those, use a square PNG. Ours live in design/icon. An Apple
+# TV's icon is a wide layered card and an Apple Watch's is drawn in circles,
+# so each takes files of its own; name them here:
+# icon:
+#   apple: assets/AppIcon.icon  # an Icon Composer .icon; macOS also takes .icns
+#   png: assets/Icon.png        # a square PNG, 1024 pixels wide
+#   tvos: assets/AppIconTV.brandassets  # layered brand assets, or a wide PNG
+#   watchos: assets/AppIconWatch.icon   # an .icon drawn in circles, or a square PNG
+# nsgo dev uses the same names ending in -dev where they exist, or the files
+# dev.icon names.
+icon:
+  apple: design/icon/AppIcon.icns  # the OpenList logo on a rounded square
+  png: design/icon/Icon.png        # the same, full-bleed
+
+dev:
+  # native: this machine's backend; web: the browser; ios: a connected iPhone; ios_simulator; android: a connected device or emulator.
+  target: native
+  # true, the default, rebuilds and restarts on save; false runs once and exits with the app.
+  hot_reload: true
+
+android:
+  # Saving in the shared Download folders, and not only through the save dialog,
+  # needs the user to allow "All files access" for the app in System settings.
+  permissions: [MANAGE_EXTERNAL_STORAGE, WRITE_EXTERNAL_STORAGE]
+
+build:
+  output: dist
+  # true opens the output directory after building.
+  open: false
+  targets: [macos_arm64, windows_x64, ios_simulator, android_arm64, web]
