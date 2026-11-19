@@ -33,6 +33,9 @@ By default files go to the system's Downloads folder, in an `OpenList` subfolder
 | Path | What it holds |
 | --- | --- |
 | `main.go` | The entry point: runs `app.Root` |
+| `README.md`, `README.zh-CN.md` | This file and its Chinese version; keep them in step |
+| `ROADMAP.md` | Planned work and its feasibility (Chinese) |
+| `AGENTS.md` | Rules for AI assistants and contributors working in this repository (Chinese) |
 | `nsgo.yaml` | App name, id, version, icons, language catalogs and build targets (NSGo needs it in the module root) |
 | `src/app/` | The app: window and navigation, state, Files, Transfers, Settings, sheets, preview, permissions, and its UI tests |
 | `src/internal/openlist/` | OpenList HTTP API client |

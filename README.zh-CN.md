@@ -40,6 +40,9 @@
 | 路径 | 内容 |
 | --- | --- |
 | `main.go` | 入口：运行 `app.Root` |
+| `README.md`、`README.zh-CN.md` | 英文和中文说明，两个文件需要同步更新 |
+| `ROADMAP.md` | 后续计划及其可行性评估 |
+| `AGENTS.md` | 在本仓库工作的 AI 助手和贡献者需要遵守的规则 |
 | `nsgo.yaml` | 应用名称、ID、版本、图标、语言目录和构建目标（NSGo 要求它放在模块根目录） |
 | `src/app/` | 应用本体：窗口与导航、状态、文件、传输、设置、弹层、预览、权限，以及界面测试 |
 | `src/internal/openlist/` | OpenList HTTP API 客户端 |
