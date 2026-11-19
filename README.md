@@ -1,5 +1,7 @@
 # OpenList Client
 
+**English** | [简体中文](README.zh-CN.md)
+
 A lightweight, cross-platform client for [OpenList](https://github.com/OpenListTeam/OpenList), written in Go with [NSGo](https://nsgo.dev/). It draws with each platform's own native views, in light and dark appearance, with Simplified Chinese and English.
 
 > Status: early (v0.1.0). `go tool nsgo build` packages macOS (arm64), Windows (x64), the iOS simulator, Android (arm64) and the web; the code also supports Linux.
@@ -81,7 +83,7 @@ Setup, once: install the [instabox GitHub App](https://instabox.sh/docs/use-case
 
 ## Roadmap
 
-Planned work, with a feasibility assessment of each item, is in [ROADMAP.md](ROADMAP.md) (in Chinese).
+Planned work, with a feasibility assessment of each item, is in [ROADMAP.md](ROADMAP.md) (in Chinese). A Chinese version of this README is in [README.zh-CN.md](README.zh-CN.md).
 
 ## Acknowledgements
 
