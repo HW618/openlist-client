@@ -1,5 +1,7 @@
 # OpenList Client
 
+**English** | [简体中文](README.zh-CN.md)
+
 A lightweight, cross-platform client for [OpenList](https://github.com/OpenListTeam/OpenList), written in Go with [NSGo](https://nsgo.dev/). It draws with each platform's own native views, in light and dark appearance, with Simplified Chinese and English.
 
 > Status: early (v0.1.0). `go tool nsgo build` packages macOS (arm64), Windows (x64), the iOS simulator, Android (arm64) and the web; the code also supports Linux.
@@ -31,6 +33,9 @@ By default files go to the system's Downloads folder, in an `OpenList` subfolder
 | Path | What it holds |
 | --- | --- |
 | `main.go` | The entry point: runs `app.Root` |
+| `README.md`, `README.zh-CN.md` | This file and its Chinese version; keep them in step |
+| `ROADMAP.md` | Planned work and its feasibility (Chinese) |
+| `AGENTS.md` | Rules for AI assistants and contributors working in this repository (Chinese) |
 | `nsgo.yaml` | App name, id, version, icons, language catalogs and build targets (NSGo needs it in the module root) |
 | `src/app/` | The app: window and navigation, state, Files, Transfers, Settings, sheets, preview, permissions, and its UI tests |
 | `src/internal/openlist/` | OpenList HTTP API client |
@@ -78,6 +83,10 @@ Publishing a release on GitHub runs [`.github/workflows/release.yml`](.github/wo
 To release: set `version` in `nsgo.yaml`, then publish a release tagged `v<version>` (version `0.1.0` is tag `v0.1.0`); the workflow stops if they differ. The packages are not signed with a store or developer certificate: the APK carries the debug key, and macOS and Windows may warn on first start.
 
 Setup, once: install the [instabox GitHub App](https://instabox.sh/docs/use-cases/ci) for this repository (the dashboard's CI page, *Connect GitHub*); jobs with `runs-on: instabox-medium` wait in the queue until it is.
+
+## Roadmap
+
+Planned work, with a feasibility assessment of each item, is in [ROADMAP.md](ROADMAP.md) (in Chinese). A Chinese version of this README is in [README.zh-CN.md](README.zh-CN.md).
 
 ## Acknowledgements
 
