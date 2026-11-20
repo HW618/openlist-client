@@ -1,0 +1,38 @@
+name: CI
+
+# PR and push checks for the develop branch: the same set AGENTS.md §4.1 lists.
+on:
+  pull_request:
+    branches: [dev, main]
+  push:
+    branches: [dev]
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: nsgo test, check, and vet
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      - name: go tool nsgo test
+        run: go tool nsgo test
+
+      - name: go tool nsgo check
+        run: go tool nsgo check
+
+      - name: go vet (windows)
+        run: GOOS=windows go vet ./src/...
+
+      - name: go vet (js/wasm)
+        run: GOOS=js GOARCH=wasm go vet ./src/...
+
+      - name: go vet (linux, no cgo)
+        run: GOOS=linux CGO_ENABLED=0 go vet ./src/...

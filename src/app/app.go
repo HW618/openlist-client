@@ -25,7 +25,14 @@ func rootWith(cx *core.Scope, secrets store.Secrets) core.Node {
 	base.SetScrollbarTheme(cx, bars)
 	app := newApp(cx, secrets)
 	if startupChecks {
-		cx.Post(func() { app.checkAccess(false) })
+		cx.Post(func() {
+			// Guide notifications before other access checks so the Allow
+			// button is a clear first-launch step (and a user gesture on web).
+			if notifyGuide {
+				app.guideNotifyPermission()
+			}
+			app.checkAccess(false)
+		})
 	}
 	th := theme.Of(cx)
 	return core.View{

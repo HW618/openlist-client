@@ -212,6 +212,27 @@ func (a *App) issueCard(cx *core.Scope, th theme.Colors, is accessIssue) core.No
 		})
 	case access.Keychain:
 		title, desc = locales.AccessKeychainTitle(cx), locales.AccessKeychainDesc(cx)
+	case access.Notifications:
+		title, desc = locales.AccessNotificationsTitle(cx), locales.AccessNotificationsDesc(cx)
+		if is.Detail == "guide" || is.Detail == "" {
+			act(locales.AccessAllowNotifications(cx), lucide.Bell, "access-notify-allow", func() {
+				a.closeSheet()
+				a.requestNotifyPermission(func(perm core.NotificationPermission) {
+					switch perm {
+					case core.NotificationsGranted, core.NotificationsUnavailable:
+						a.toast(locales.ToastNotifyReady(a.cx))
+					case core.NotificationsDenied:
+						a.raise([]accessIssue{{Kind: access.Notifications, Detail: "denied"}})
+					}
+				})
+			})
+		} else {
+			act(locales.AccessOpenSettings(cx), lucide.Settings, "access-settings", func() {
+				// Notification permission has no dedicated OpenPermissionSettings
+				// key; guide the user to the system app settings page.
+				a.toast(locales.ToastSettingsManual(a.cx))
+			})
+		}
 	default:
 		title, desc = locales.AccessBrowserTitle(cx), locales.AccessBrowserDesc(cx, is.Detail)
 		siteID := is.SiteID

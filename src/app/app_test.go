@@ -186,6 +186,9 @@ func start(t *testing.T, opts ...nsgotest.Option) *nsgotest.App {
 
 // startWith is start with the tokens already kept.
 func startWith(t *testing.T, secrets store.Secrets, opts ...nsgotest.Option) *nsgotest.App {
+	prevGuide := notifyGuide
+	notifyGuide = false
+	t.Cleanup(func() { notifyGuide = prevGuide })
 	return nsgotest.Start(t, func(cx *core.Scope) core.Node { return rootWith(cx, secrets) }, opts...)
 }
 

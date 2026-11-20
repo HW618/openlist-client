@@ -44,6 +44,7 @@ func (a *App) settingsPage(cx *core.Scope) core.Node {
 			core.View{Style: core.Style{Gap: 18, Padding: core.Edges{Left: theme.Space4, Right: theme.Space4, Top: 4, Bottom: 32}}, Children: []core.Node{
 				group(locales.GroupSites(cx), a.sitesList(cx)),
 				group(locales.GroupAppearance(cx), a.appearanceRows(cx)...),
+				group(locales.GroupNotifications(cx), a.notificationRows(cx)...),
 				group(locales.GroupPaths(cx), a.pathRows(cx)...),
 				group(locales.GroupAbout(cx), a.aboutRows(cx)...),
 			}}}})
@@ -207,6 +208,43 @@ func (a *App) setDefaultView(v store.ViewMode) {
 func (a *App) setDefaultSort(k store.SortKey) {
 	a.savePrefs(func(p *store.Prefs) { p.Sort = k })
 	a.sortKey.Set(k)
+}
+
+// notificationRows are the task-completion notification toggles.
+func (a *App) notificationRows(cx *core.Scope) []core.Node {
+	master := ui.Switch{
+		Checked: func() bool { return a.prefs.Get().NotifyMaster() },
+		Label:   locales.NotifyMaster(cx), TestID: "notify-master",
+		OnChange: func(on bool) {
+			a.saveNotifyToggle(func(n *store.NotifyPrefs) { n.Master = on })
+			if on {
+				a.pollOffline()
+			}
+		},
+	}
+	success := ui.Switch{
+		Checked:  func() bool { return a.prefs.Get().NotifySuccess() },
+		Label:    locales.NotifySuccess(cx), TestID: "notify-success",
+		Disabled: func() bool { return !a.prefs.Get().NotifyMaster() },
+		OnChange: func(on bool) { a.saveNotifyToggle(func(n *store.NotifyPrefs) { n.Success = on }) },
+	}
+	failure := ui.Switch{
+		Checked:  func() bool { return a.prefs.Get().NotifyFailure() },
+		Label:    locales.NotifyFailure(cx), TestID: "notify-failure",
+		Disabled: func() bool { return !a.prefs.Get().NotifyMaster() },
+		OnChange: func(on bool) { a.saveNotifyToggle(func(n *store.NotifyPrefs) { n.Failure = on }) },
+	}
+	return []core.Node{
+		optionRow(cx, locales.NotifyMaster(cx), locales.NotifyMasterDesc(cx), master),
+		hairline(cx),
+		optionRow(cx, locales.NotifySuccess(cx), locales.NotifySuccessDesc(cx), success),
+		hairline(cx),
+		optionRow(cx, locales.NotifyFailure(cx), locales.NotifyFailureDesc(cx), failure),
+		hairline(cx),
+		core.View{Style: core.Style{Gap: 2, Padding: core.Symmetric(12, 0)}, Children: []core.Node{
+			txt(cx, locales.NotifyLimitsTitle(cx), theme.TypeBody, cText),
+			txt(cx, locales.NotifyLimitsDesc(cx), theme.TypeCaption, cMuted)}},
+	}
 }
 
 // pathValue shows a folder with a button that changes it, and one that clears
