@@ -64,6 +64,13 @@ func TestNotifyPrefsDefaultOn(t *testing.T) {
 	if p.NotifyMaster() {
 		t.Fatal("master off should stick")
 	}
+	// Success/failure can be turned off independently once Set.
+	p.Notifications.Master = true
+	p.Notifications.Success = false
+	p.Notifications.Failure = false
+	if p.NotifySuccess() || p.NotifyFailure() {
+		t.Fatal("success/failure off should stick")
+	}
 }
 
 func TestFileSecrets(t *testing.T) {
