@@ -6,13 +6,17 @@
     Files 标签 / 面包屑 / 排序 / 视图切换 ... src/app/files.go
     Transfers 标签 / 离线下载区块 .......... src/app/transfers.go · src/app/offline.go（离线区块仅管理员可见）
     Settings 标签 / 站点列表（默认只显示当前站点，右侧箭头展开，最高 320 滚动） ... src/app/settings.go
+    Settings · 通知开关组 .................... src/app/settings.go · 通知偏好（待实现，ROADMAP §1）
+    系统通知点击跳转 ......................... cx.OnNotificationPress → 传输 / 离线下载
     各类底部面板 / 对话框 ................... src/app/sheets.go（宽 ≥ 640 为对话框，否则为底部面板）
     权限对话框 ............................... src/app/permissions.go · src/internal/access
+    通知权限被拒引导 ......................... src/app/permissions.go（通知类，待实现）
     预览 / 悬浮按钮 .......................... src/app/preview.go · src/app/fabview.go
 
   演示参数（URL query）
     ?platform=desktop|web|android   切换“本机默认下载位置”的平台变体
-    ?perm=folder,network,server,browser,keychain  启动即弹出对应的权限对话框
+    ?perm=folder,network,server,browser,keychain,notifications  启动即弹出对应的权限对话框
+    ?notify=1                       演示一条合并后的任务完成通知（可点击跳到传输）
 
   布局沿用 OD-LAYOUT-PRIMITIVES v1，样式沿用 Apple Design System 令牌与平台中性手机外壳。
 -->
@@ -1267,6 +1271,49 @@
       pointer-events: none;
     }
 
+    /* System notification banner (prototype of cx.ShowNotification) */
+    .sys-notify {
+      position: absolute;
+      left: 12px;
+      right: 12px;
+      top: calc(var(--phone-safe-top, 50px) + 8px);
+      z-index: 40;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      padding: 12px 14px;
+      border-radius: 14px;
+      background: color-mix(in oklab, var(--surface) 92%, var(--fg));
+      border: 1px solid var(--border-soft);
+      box-shadow: var(--elev-raised);
+      cursor: pointer;
+      text-align: left;
+      font: inherit;
+      color: inherit;
+    }
+    .sys-notify[hidden] { display: none !important; }
+    .sys-notify-app {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--muted);
+      letter-spacing: 0.02em;
+      text-transform: uppercase;
+    }
+    .sys-notify-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--fg);
+    }
+    .sys-notify-body {
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.4;
+    }
+    .setting-row.is-disabled {
+      opacity: 0.45;
+      pointer-events: none;
+    }
+
     /* Selection Mode & Checkboxes */
     .selection-count {
       font-weight: 500;
@@ -1635,6 +1682,46 @@
                 </div>
               </div>
 
+              <div class="settings-group" id="settingsNotificationsGroup">
+                <h2 class="group-label">通知</h2>
+                <div class="group-card">
+                  <div class="setting-row">
+                    <div>
+                      <div class="setting-title">任务完成通知</div>
+                      <div class="setting-desc">上传、下载与离线任务完成或失败时发出系统通知</div>
+                    </div>
+                    <button type="button" class="switch" id="toggleNotifyMaster" role="switch" aria-checked="true" aria-label="任务完成通知"></button>
+                  </div>
+                  <div class="setting-row" id="rowNotifySuccess">
+                    <div>
+                      <div class="setting-title">成功时通知</div>
+                      <div class="setting-desc">任务成功完成时提醒；多条合并为一条</div>
+                    </div>
+                    <button type="button" class="switch" id="toggleNotifySuccess" role="switch" aria-checked="true" aria-label="成功时通知"></button>
+                  </div>
+                  <div class="setting-row" id="rowNotifyFailure">
+                    <div>
+                      <div class="setting-title">失败时通知</div>
+                      <div class="setting-desc">任务失败时提醒</div>
+                    </div>
+                    <button type="button" class="switch" id="toggleNotifyFailure" role="switch" aria-checked="true" aria-label="失败时通知"></button>
+                  </div>
+                  <div class="setting-row" style="align-items:flex-start">
+                    <div>
+                      <div class="setting-title">平台限制</div>
+                      <div class="setting-desc" id="notifyLimitsDesc">应用被系统杀掉后传输会中断，也就没有通知；离线下载在服务器完成时，应用未运行也收不到。Linux 与网页版只显示本次运行发出的通知。Windows 点击通知需通过安装包安装过本应用。</div>
+                    </div>
+                  </div>
+                  <div class="setting-row" id="rowNotifyDemo">
+                    <div>
+                      <div class="setting-title">演示通知</div>
+                      <div class="setting-desc">弹出一条合并通知，点击后跳到「传输」</div>
+                    </div>
+                    <button type="button" class="text-btn" id="btnDemoNotify">演示</button>
+                  </div>
+                </div>
+              </div>
+
               <div class="settings-group">
                 <h2 class="group-label">目录与下载路径 <span id="settingsSiteScope" style="font-weight:500; color:var(--accent); text-transform:none; letter-spacing:0"></span></h2>
                 <div class="group-card">
@@ -1821,6 +1908,13 @@
       <!-- ─── Toast Feedback ─── -->
       <div class="toast" id="toastEl" role="status" aria-live="polite" hidden></div>
 
+      <!-- ─── System notification (ROADMAP §1 demo) ─── -->
+      <button type="button" class="sys-notify" id="sysNotifyEl" hidden aria-label="打开传输页">
+        <span class="sys-notify-app">OpenList</span>
+        <span class="sys-notify-title" id="sysNotifyTitle">3 个文件已下载</span>
+        <span class="sys-notify-body" id="sysNotifyBody">点击查看传输记录</span>
+      </button>
+
       <!-- ─── System Chrome (Status Bar, Camera, Home Indicator) ─── -->
       <div class="status-bar" aria-hidden="true">
         <span class="status-time">9:41</span>
@@ -1864,6 +1958,11 @@
         offlineDraft: { url: '', tool: 'aria2' },
         dirPickerMode: null,
         dirPickerBrowsePathIds: ['root'],
+        // 通知偏好（ROADMAP §1）：总开关、成功/失败分别开关；首次需要时才请求系统权限
+        notifyMaster: true,
+        notifySuccess: true,
+        notifyFailure: true,
+        notifyPermission: 'not-asked', // 'not-asked' | 'granted' | 'denied'
 
         sites: [
           {
@@ -2068,6 +2167,16 @@
 
       const siteListCard = $('#siteListCard');
       const toggleDarkMode = $('#toggleDarkMode');
+      const toggleNotifyMaster = $('#toggleNotifyMaster');
+      const toggleNotifySuccess = $('#toggleNotifySuccess');
+      const toggleNotifyFailure = $('#toggleNotifyFailure');
+      const rowNotifySuccess = $('#rowNotifySuccess');
+      const rowNotifyFailure = $('#rowNotifyFailure');
+      const btnDemoNotify = $('#btnDemoNotify');
+      const sysNotifyEl = $('#sysNotifyEl');
+      const sysNotifyTitle = $('#sysNotifyTitle');
+      const sysNotifyBody = $('#sysNotifyBody');
+      let sysNotifyTimer = null;
       const btnClearLocalDir = $('#btnClearLocalDir');
       const prefDefaultFilesDirLabel = $('#prefDefaultFilesDirLabel');
       const prefDefaultOfflineDirLabel = $('#prefDefaultOfflineDirLabel');
@@ -2765,6 +2874,13 @@
           prefLocalDownloadDirLabel.textContent = siteSettings.localDownloadDir;
         }
         cacheSizeLabel.textContent = state.cacheMB > 0 ? `当前占用 ${state.cacheMB.toFixed(1)} MB` : '缓存已清空';
+
+        const masterOn = !!state.notifyMaster;
+        toggleNotifyMaster.setAttribute('aria-checked', masterOn ? 'true' : 'false');
+        toggleNotifySuccess.setAttribute('aria-checked', state.notifySuccess ? 'true' : 'false');
+        toggleNotifyFailure.setAttribute('aria-checked', state.notifyFailure ? 'true' : 'false');
+        rowNotifySuccess.classList.toggle('is-disabled', !masterOn);
+        rowNotifyFailure.classList.toggle('is-disabled', !masterOn);
       }
 
       /* ─── Preview Screen ─── */
@@ -3115,6 +3231,10 @@
           } else if (is.kind === 'keychain') {
             title = '无法安全保存登录信息';
             desc = '没有找到系统的密钥服务（Secret Service）。请安装并启动 GNOME Keyring 或 KWallet（例如 sudo apt install gnome-keyring），登录桌面后点“重新检查”。在此之前，登录信息只保存到本次运行结束，不会写入磁盘。';
+          } else if (is.kind === 'notifications') {
+            title = '无法发送通知';
+            desc = '系统未允许本应用显示通知。请在系统设置中开启通知权限后重试；iOS 与安卓通常只会询问一次。';
+            actions = act('settings', 'settings', '打开系统设置');
           } else {
             title = '浏览器阻止了保存文件';
             desc = `浏览器不允许本页面写入你的设备（${is.detail}）。请重新授权该文件夹，或改用浏览器自带的下载。`;
@@ -3744,6 +3864,65 @@
         renderSettings();
       });
 
+      function showSysNotify(title, body, id) {
+        if (!state.notifyMaster) {
+          showToast('已关闭任务完成通知');
+          return;
+        }
+        if (state.notifyPermission === 'denied') {
+          openPermissionSheet([{ kind: 'notifications', detail: 'denied', target: '' }]);
+          return;
+        }
+        if (state.notifyPermission === 'not-asked') {
+          state.notifyPermission = 'granted';
+        }
+        sysNotifyEl.dataset.notifyId = id || 'transfer:done';
+        sysNotifyTitle.textContent = title;
+        sysNotifyBody.textContent = body;
+        sysNotifyEl.hidden = false;
+        clearTimeout(sysNotifyTimer);
+        sysNotifyTimer = setTimeout(() => { sysNotifyEl.hidden = true; }, 6000);
+      }
+
+      function pressSysNotify() {
+        const id = sysNotifyEl.dataset.notifyId || '';
+        sysNotifyEl.hidden = true;
+        // OnNotificationPress：transfer:* → 传输页；offline → 传输页离线区块
+        setActiveTab('transfers');
+        if (id.startsWith('offline')) {
+          showToast('已打开离线下载');
+        } else {
+          showToast('已打开传输');
+        }
+      }
+
+      toggleNotifyMaster.addEventListener('click', () => {
+        state.notifyMaster = !state.notifyMaster;
+        if (state.notifyMaster && state.notifyPermission === 'not-asked') {
+          state.notifyPermission = 'granted';
+          showToast('已允许通知（原型）');
+        }
+        renderSettings();
+      });
+      toggleNotifySuccess.addEventListener('click', () => {
+        if (!state.notifyMaster) return;
+        state.notifySuccess = !state.notifySuccess;
+        renderSettings();
+      });
+      toggleNotifyFailure.addEventListener('click', () => {
+        if (!state.notifyMaster) return;
+        state.notifyFailure = !state.notifyFailure;
+        renderSettings();
+      });
+      btnDemoNotify.addEventListener('click', () => {
+        if (state.notifySuccess) {
+          showSysNotify('3 个文件已下载', '点击查看传输记录', 'transfer:done');
+        } else {
+          showToast('已关闭成功通知');
+        }
+      });
+      sysNotifyEl.addEventListener('click', pressSysNotify);
+
       $$('[data-pref-view]').forEach((btn) => {
         btn.addEventListener('click', () => {
           state.viewMode = btn.dataset.prefView;
@@ -4235,8 +4414,9 @@
       renderFiles();
       updateTransferBadge();
 
-      // 演示：?perm=folder|network|server|browser|keychain（可逗号分隔）启动即弹出权限对话框
-      const permParam = new URLSearchParams(location.search).get('perm');
+      // 演示：?perm=folder|network|server|browser|keychain|notifications（可逗号分隔）启动即弹出权限对话框
+      const bootParams = new URLSearchParams(location.search);
+      const permParam = bootParams.get('perm');
       if (permParam) {
         const site = getActiveSite();
         const samples = {
@@ -4244,10 +4424,17 @@
           network: { kind: 'network', detail: 'no route to host', target: site ? site.url : 'openlist.local' },
           server: { kind: 'server', detail: 'HTTP 403', target: '' },
           browser: { kind: 'browser', detail: 'NotAllowedError', target: '' },
-          keychain: { kind: 'keychain', detail: 'no Secret Service', target: '' }
+          keychain: { kind: 'keychain', detail: 'no Secret Service', target: '' },
+          notifications: { kind: 'notifications', detail: 'denied', target: '' }
         };
+        if (permParam.split(',').includes('notifications')) {
+          state.notifyPermission = 'denied';
+        }
         const issues = permParam.split(',').map((k) => samples[k]).filter(Boolean);
         if (issues.length) openPermissionSheet(issues);
+      }
+      if (bootParams.get('notify') === '1') {
+        setTimeout(() => showSysNotify('3 个文件已下载', '点击查看传输记录', 'transfer:done'), 400);
       }
     })();
   </script>

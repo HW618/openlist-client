@@ -52,7 +52,7 @@
 | `src/internal/access/` | 把失败归类为权限问题 |
 | `src/locales/` | `en.yaml` 和 `zh-Hans.yaml` 语言目录；`catalog_gen.go` 为自动生成 |
 | `src/theme/` | 主题（`openlist.yaml`）及其加载器 |
-| `.github/workflows/` | `release.yml`：发布 release 时构建并发布各平台客户端 |
+| `.github/workflows/` | `ci.yml`（PR/`dev` 检查）和 `release.yml`（发布 release 时构建） |
 | `design/prototype/` | 应用的 Open Design HTML 原型 |
 | `design/icon/` | 应用图标源文件，以及制作图标所用的 OpenList 标志 |
 
@@ -73,7 +73,9 @@ go tool nsgo build -target macos_arm64   # 只构建一个目标；加 -installe
 
 请使用 `go tool nsgo` 命令，而不要直接用 `go build` 或 `go test`：它们会做类型检查、生成语言目录，并对所有目标做 vet。
 
-原型是单个文件：用浏览器打开 `design/prototype/index-v0.0.1.html`（参数：`?platform=desktop|web|android`，`?perm=folder,network,server,browser`）。
+原型是单个文件：用浏览器打开 `design/prototype/index-v0.0.1.html`（参数：`?platform=desktop|web|android`，`?perm=folder,network,server,browser,keychain,notifications`，`?notify=1` 可演示一条任务完成通知）。
+
+向 `dev` 的推送和针对它的 PR 会运行 [`.github/workflows/ci.yml`](.github/workflows/ci.yml)：`go tool nsgo test`、`go tool nsgo check`，以及对 Windows、js/wasm、Linux（关闭 cgo）的 `go vet`，与 [AGENTS.md](AGENTS.md) §4.1 一致。
 
 ## 发布
 
@@ -87,7 +89,20 @@ go tool nsgo build -target macos_arm64   # 只构建一个目标；加 -installe
 | Linux（arm64） | `.deb`、`.pkg.tar.gz`、`.AppImage` | InstaBox |
 | macOS（arm64、x64） | `.dmg` | GitHub 的 `macos-latest` 运行器：macOS 打包需要 Xcode，而 InstaBox 的 Linux 机器没有 |
 
-发布步骤：先修改 `nsgo.yaml` 里的 `version`，再发布标签为 `v<版本号>` 的 release（版本 `0.1.0` 对应标签 `v0.1.0`）；两者不一致时工作流会停止。安装包没有使用商店或开发者证书签名：APK 使用调试密钥，macOS 和 Windows 首次启动时可能出现安全提示。
+发布步骤：先修改 `nsgo.yaml` 里的 `version`，再发布标签为 `v<版本号>` 的 release（版本 `0.1.0` 对应标签 `v0.1.0`）；两者不一致时工作流会停止。在配好开发者或商店证书之前，macOS 和 Windows 首次启动时可能出现安全提示。
+
+### Android 正式签名（未配置密钥时仍用调试密钥）
+
+在第一个对外版本前，请在本机生成 PKCS#12（或 JKS）密钥库，并在仓库的 Secrets（Settings → Secrets and variables → Actions）中添加下列项。不要把密钥库或密码提交进仓库（`*.p12` / `*.jks` 已在 `.gitignore` 中）。
+
+| Secret | 用途 |
+| --- | --- |
+| `ANDROID_KEYSTORE_BASE64` | 密钥库文件的 base64 |
+| `NSGO_KEYSTORE_PASSWORD` | 密钥库密码（NSGo 读取此环境变量名） |
+| `NSGO_KEY_PASSWORD` | 密钥密码（常与密钥库密码相同） |
+| `ANDROID_KEY_ALIAS` | 可选；默认 `openlist` |
+
+仅当设置了 `ANDROID_KEYSTORE_BASE64` 时，`release.yml` 才会把密钥库写到 `.nsgo/` 并传入 `-keystore` / `-key-alias`。
 
 一次性设置：为本仓库安装 [instabox GitHub App](https://instabox.sh/docs/use-cases/ci)（控制台的 CI 页面，点击 *Connect GitHub*）；在安装之前，使用 `runs-on: instabox-medium` 的任务会一直排队。
 
