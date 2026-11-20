@@ -100,7 +100,8 @@ toastSiteOk: "{name} is reachable ({latency})"
 toastSiteFail: "{name} did not answer"
 toastFilesDir: "Files page folder set to {dir}"
 toastOfflineDir: "Offline download folder set to {dir}"
-toastLocalDir: "Downloads on this device go to {dir}"
+toastLocalDir: "Download save location set to {dir}"
+toastFolderAuthorized: Access to files on this device is allowed
 toastRetrying: "Retrying {name}"
 toastNoDone: No finished tasks
 toastClearedDone: Finished tasks cleared
@@ -198,8 +199,8 @@ renameLabel: New name *
 renameError: Enter a name
 confirmRename: Save
 
-# Local download folder
-localDirTitle: Download folder on this device
+# Download save location
+localDirTitle: Choose download save location
 localDirLabel: Folder *
 localDirError: Enter a valid folder path
 localDirChoose: Choose with the system dialog
@@ -275,8 +276,12 @@ filesDirTitle: Files page folder
 filesDirDesc: Where the app opens, and where it goes when you switch site
 offlineDirTitle: Offline download folder
 offlineDirDesc: Where offline downloads started from the root are saved
-localDirSettingTitle: Download folder on this device
-localDirSettingDesc: Defaults to the system Downloads folder; tap Change to pick another
+localDirSettingTitle: Download save location
+localDirSettingDesc: Defaults to the system Downloads folder; tap to change
+localDirSettingDescTap: Tap to open the system folder picker
+localDirSettingDescWeb: Tap to choose a folder the browser may write to
+localDirSettingDescNeedAuth: Authorize file access first, then choose a save folder
+localDirSettingDescGranted: Authorized; tap to change the save folder
 cacheTitle: Thumbnail and folder cache
 cacheUsed: "Using {size}"
 cacheEmpty: Cache is empty
@@ -320,8 +325,13 @@ localDirAsk: Ask for each download
 localDirAskDesc: Choose where to save in the system's save dialog
 localDirNeedAccess: This app may not write in this folder, so downloads use the system's save dialog. Allow "All files access" in System settings › Apps › OpenList › Permissions, then try again.
 localDirNoPickerToast: This folder can't be written to. Choose another.
+folderAuthTitle: '"All files access" is required'
+folderAuthDesc: 'On Android, choosing a download save location needs "All files access". Open system settings to allow it, then continue. Without it, the app cannot reliably write to the folder you pick.'
+folderAuthTitleGeneric: Authorization needed to choose a download save location
+folderAuthDescGeneric: Allow OpenList to access folders on this device, then choose a download save location.
+folderAuthGrant: Authorize
 saveCancelled: Save cancelled
-webTooLarge: "This file ({size}) is too large for the browser to save directly. Choose a download folder on this device in Settings, then try again."
+webTooLarge: "This file ({size}) is too large for the browser to save directly. Choose a download save location in Settings, then try again."
 
 # Permissions and site checks
 accessTitle: Permissions needed

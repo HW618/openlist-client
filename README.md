@@ -26,7 +26,7 @@ Tokens are only sent to the server's own host, and not over plain `http` when th
 
 ## Downloads
 
-By default files go to the system's Downloads folder, in an `OpenList` subfolder, and each server can use its own folder. In the browser a file is handed to the browser's download, or written to a folder you grant access to (large files need that folder).
+By default files go to the system's Downloads folder, in an `OpenList` subfolder; each server can set its own **download save location** in Settings. On Android, if the app lacks “All files access”, tapping that setting prompts you to authorize first, then continues into the folder picker. In the browser a file is handed to the browser's download, or written to a folder you grant access to (large files need that folder).
 
 ## Layout
 
@@ -66,7 +66,7 @@ go tool nsgo build -target macos_arm64   # one target; add -installers=false to 
 
 Run the `go tool nsgo` commands rather than `go build` or `go test` directly: they type-check, generate the locale catalogs and vet every target.
 
-The prototype is a single file: open `design/prototype/index-v0.0.1.html` in a browser (`?platform=desktop|web|android`, `?perm=folder,network,server,browser,keychain,notifications`, `?notify=1` for a demo task-completion notification).
+The prototype is a single file: open `design/prototype/index-v0.0.1.html` in a browser (`?platform=desktop|web|android`, `?tab=settings`, `?auth=folder`, `?pick=1`, `?perm=folder,network,server,browser,keychain,notifications`, `?notify=1` for a demo task-completion notification).
 
 Pull requests and pushes to `dev` run [`.github/workflows/ci.yml`](.github/workflows/ci.yml): `go tool nsgo test`, `go tool nsgo check`, and `go vet` for Windows, js/wasm, and Linux (no cgo), matching [AGENTS.md](AGENTS.md) §4.1.
 

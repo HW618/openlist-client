@@ -38,6 +38,7 @@ func (a *App) sheetHost(cx *core.Scope) core.Node {
 		at(sheetDelete, a.deleteSheet),
 		at(sheetRename, a.renameSheet),
 		at(sheetPermission, a.permissionSheet),
+		at(sheetFolderAuth, a.folderAuthSheet),
 		at(sheetLocalDir, a.localDirSheet),
 	}}
 }
@@ -544,15 +545,24 @@ func (a *App) pickerSheet(cx *core.Scope, st sheetState) core.Node {
 
 // ---- folder on this device ----
 
-// pickLocalDir asks the system for the folder downloads of the current site
-// are saved in, with the system's own folder dialog: the browser's in a
-// browser.
+// pickLocalDir is Settings「下载保存位置」: authorize first when needed, then
+// open the folder picker (ROADMAP §2 narrowed scope).
 func (a *App) pickLocalDir() {
 	s, ok := a.site()
 	if !ok {
 		a.toast(locales.ToastNoSite(a.cx))
 		return
 	}
+	if savesThroughDialog() && !a.canWrite.GetUntracked() {
+		a.openSheet(sheetState{Kind: sheetFolderAuth})
+		return
+	}
+	a.openDownloadSaveLocationPicker(s)
+}
+
+// openDownloadSaveLocationPicker opens the platform folder picker after
+// authorization is settled (or not required).
+func (a *App) openDownloadSaveLocationPicker(s store.Site) {
 	if isWeb() {
 		webFolderPick(s.ID, func(name string, err error) {
 			a.cx.Post(func() {
@@ -570,9 +580,8 @@ func (a *App) pickLocalDir() {
 		return
 	}
 	if savesThroughDialog() {
-		// Android's folder picker reads a folder and cannot write in it, so the
-		// choice is among the shared folders the app can reach.
-		a.checkAccess(false)
+		// Android's system folder picker is read-only for writing; choose among
+		// shared folders the app can reach after "All files access".
 		a.openSheet(sheetState{Kind: sheetLocalDir})
 		return
 	}
@@ -591,6 +600,68 @@ func (a *App) pickLocalDir() {
 		})
 }
 
+// folderAuthSheet asks for file access before choosing a download save
+// location (Android「所有文件访问」). 「去授权」opens system settings, then
+// continues into the folder picker.
+func (a *App) folderAuthSheet(cx *core.Scope, _ sheetState) core.Node {
+	title, desc := locales.FolderAuthTitleGeneric(cx), locales.FolderAuthDescGeneric(cx)
+	if savesThroughDialog() {
+		title, desc = locales.FolderAuthTitle(cx), locales.FolderAuthDesc(cx)
+	}
+	body := []core.Node{
+		core.View{Role: core.RoleGroup, Label: title, TestID: "folder-auth-prompt",
+			Style:     core.Style{Gap: 10, Padding: core.All(14), BorderWidth: 1, CornerRadius: theme.RadiusMD, BorderCurve: core.BorderCurveContinuous},
+			StyleFunc: cardStyle(cx, theme.RadiusMD),
+			Children: []core.Node{
+				row(10, tile(cx, lucide.ShieldAlert, "", 32, 10), core.View{Style: fillStyle, Children: []core.Node{txt(cx, title, theme.TypeBody.Merge(core.Style{FontWeight: ui.Semibold}), cText)}}),
+				txt(cx, desc, theme.TypeCaption, cMuted),
+			}},
+	}
+	return a.sheetFrame(title, body, []core.Node{
+		ui.Button{Text: locales.AccessLater(cx), Variant: ui.ButtonSecondary, Flex: 1, OnPress: a.closeSheet, TestID: "folder-auth-later"},
+		ui.Button{Text: locales.FolderAuthGrant(cx), Flex: 1, TestID: "folder-auth-grant", OnPress: a.grantFolderAccessThenPick},
+	})
+}
+
+// grantFolderAccessThenPick opens system permission settings, marks access as
+// granted for continuing the pick, and opens the download save location picker.
+func (a *App) grantFolderAccessThenPick() {
+	s, ok := a.site()
+	if !ok {
+		a.closeSheet()
+		a.toast(locales.ToastNoSite(a.cx))
+		return
+	}
+	a.cx.OpenPermissionSettings(core.PermissionFullDiskAccess, func(opened bool) {
+		a.cx.Post(func() {
+			if !opened {
+				a.toast(locales.ToastSettingsManual(a.cx))
+			}
+			// Continue into the picker after the user is guided to authorize;
+			// canWrite is refreshed by checkAccess / probe when they return.
+			a.canWrite.Set(true)
+			a.closeSheet()
+			a.toast(locales.ToastFolderAuthorized(a.cx))
+			a.openDownloadSaveLocationPicker(s)
+			a.refreshFolderWritable(s)
+		})
+	})
+}
+
+// refreshFolderWritable probes whether the site's download folder can be
+// written and updates canWrite (Android settings copy).
+func (a *App) refreshFolderWritable(s store.Site) {
+	if !savesThroughDialog() {
+		return
+	}
+	dir := a.downloadDir(s)
+	probe := a.probeDir
+	go func() {
+		writable := probe(dir) == nil
+		a.cx.Post(func() { a.canWrite.Set(writable) })
+	}()
+}
+
 // localDirSheet is the choice of a folder for downloads on Android: one of
 // the shared folders of the storage, or a save dialog for each download.
 func (a *App) localDirSheet(cx *core.Scope, _ sheetState) core.Node {
@@ -602,7 +673,7 @@ func (a *App) localDirSheet(cx *core.Scope, _ sheetState) core.Node {
 		return func() {
 			a.closeSheet()
 			a.setLocalDir(s.ID, dir)
-			a.checkAccess(false)
+			a.refreshFolderWritable(s)
 		}
 	}
 	rows := make([]core.Node, 0, len(androidFolders)+1)

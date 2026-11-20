@@ -34,7 +34,7 @@
 
 ## 下载
 
-文件默认保存到系统的「下载」文件夹下的 `OpenList` 子文件夹，每个服务器也可以使用自己的文件夹。在浏览器里，文件会交给浏览器下载，或写入你授权访问的文件夹（大文件需要选择这个文件夹）。
+文件默认保存到系统的「下载」文件夹下的 `OpenList` 子文件夹；每个服务器可在设置里单独指定**下载保存位置**。安卓上若缺少「所有文件访问」权限，点该设置会先提示授权，授权后再继续选夹。在浏览器里，文件会交给浏览器下载，或写入你授权访问的文件夹（大文件需要选择这个文件夹）。
 
 ## 目录结构
 
@@ -74,7 +74,7 @@ go tool nsgo build -target macos_arm64   # 只构建一个目标；加 -installe
 
 请使用 `go tool nsgo` 命令，而不要直接用 `go build` 或 `go test`：它们会做类型检查、生成语言目录，并对所有目标做 vet。
 
-原型是单个文件：用浏览器打开 `design/prototype/index-v0.0.1.html`（参数：`?platform=desktop|web|android`，`?perm=folder,network,server,browser,keychain,notifications`，`?notify=1` 可演示一条任务完成通知）。
+原型是单个文件：用浏览器打开 `design/prototype/index-v0.0.1.html`（参数：`?platform=desktop|web|android`，`?tab=settings`，`?auth=folder`，`?pick=1`，`?perm=folder,network,server,browser,keychain,notifications`，`?notify=1` 可演示一条任务完成通知）。
 
 向 `dev` 的推送和针对它的 PR 会运行 [`.github/workflows/ci.yml`](.github/workflows/ci.yml)：`go tool nsgo test`、`go tool nsgo check`，以及对 Windows、js/wasm、Linux（关闭 cgo）的 `go vet`，与 [AGENTS.md](AGENTS.md) §4.1 一致。
 

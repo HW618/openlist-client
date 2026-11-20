@@ -388,7 +388,8 @@ func TestSettingsListsDefaultFolders(t *testing.T) {
 	app.Press("id:tab-settings")
 	app.WaitFor("text:Offline download folder", time.Second)
 	app.WaitFor("text:Files page folder", time.Second)
-	app.WaitFor("text:Download folder on this device", time.Second)
+	app.WaitFor("text:Download save location", time.Second)
+	app.WaitFor("id:download-save-location-row", time.Second)
 }
 
 func TestPreviewOfUnsupportedFile(t *testing.T) {
@@ -680,6 +681,7 @@ func TestAndroidChoosesAmongTheSharedFolders(t *testing.T) {
 	srv := newFakeServer(t)
 	app := start(t, seed(srv.URL))
 	app.Press("id:tab-settings")
+	app.WaitFor("id:download-save-location-row", time.Second)
 	app.Press("id:local-dir-change")
 	app.WaitFor("text:Documents/OpenList", time.Second)
 	app.WaitFor("text:Ask for each download", time.Second)
@@ -691,6 +693,31 @@ func TestAndroidChoosesAmongTheSharedFolders(t *testing.T) {
 	app.WaitUntil(time.Second, func() bool {
 		return slices.Contains(app.Texts(), "Ask for each download") && !slices.Contains(app.Texts(), "Documents/OpenList")
 	})
+}
+
+// TestAndroidAuthorizesBeforePickingDownloadFolder: when the download folder
+// is not writable, Settings「下载保存位置」shows the authorize sheet first;
+// 「去授权」then continues into the shared-folder picker.
+func TestAndroidAuthorizesBeforePickingDownloadFolder(t *testing.T) {
+	asAndroid(t)
+	startupChecks = true
+	t.Cleanup(func() { startupChecks = false })
+	srv := newFakeServer(t)
+	dir := readOnlyDir(t)
+	app := start(t, seedIn(srv.URL, dir))
+	app.Press("id:tab-settings")
+	app.WaitUntil(3*time.Second, func() bool {
+		return slices.Contains(app.Texts(), "Authorize file access first, then choose a save folder")
+	})
+	app.Press("id:local-dir-change")
+	app.WaitFor("id:folder-auth-prompt", time.Second)
+	app.WaitFor("id:folder-auth-grant", time.Second)
+	app.Press("id:folder-auth-grant")
+	app.WaitFor("text:Documents/OpenList", 2*time.Second)
+	app.WaitFor("text:Ask for each download", time.Second)
+	if !slices.Contains(app.PermissionSettings, core.PermissionFullDiskAccess) {
+		t.Fatalf("expected OpenPermissionSettings(FullDiskAccess), got %v", app.PermissionSettings)
+	}
 }
 
 func TestAndroidSavesStraightIntoAFolderItCanWrite(t *testing.T) {

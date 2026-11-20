@@ -48,6 +48,7 @@ const (
 	sheetDelete
 	sheetRename
 	sheetPermission
+	sheetFolderAuth
 	sheetLocalDir
 )
 

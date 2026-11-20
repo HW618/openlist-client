@@ -336,21 +336,35 @@ func (a *App) pathRows(cx *core.Scope) []core.Node {
 			return ""
 		}, defaultDownloadDir(), a.pickLocalDir, nil)
 	}
-	rows := []core.Node{
+	localDesc := func() string {
+		switch {
+		case savesThroughDialog():
+			if a.canWrite.Get() {
+				return locales.LocalDirSettingDescGranted(cx)
+			}
+			return locales.LocalDirSettingDescNeedAuth(cx)
+		case isWeb():
+			return locales.LocalDirSettingDescWeb(cx)
+		default:
+			return locales.LocalDirSettingDescTap(cx)
+		}
+	}
+	localRow := core.View{Style: core.Style{Direction: core.Row, AlignItems: core.AlignCenter, Gap: 12, Padding: core.Symmetric(12, 0)},
+		TestID: "download-save-location-row",
+		Children: []core.Node{
+			core.View{Style: fillStyle.Merge(core.Style{Gap: 2}), Children: []core.Node{
+				txt(cx, locales.LocalDirSettingTitle(cx), theme.TypeBody, cText),
+				txtf(cx, localDesc, theme.TypeCaption, cMuted),
+			}},
+			local,
+		}}
+	return []core.Node{
 		optionRow(cx, locales.FilesDirTitle(cx), locales.FilesDirDesc(cx), filesDir),
 		hairline(cx),
 		optionRow(cx, locales.OfflineDirTitle(cx), locales.OfflineDirDesc(cx), offDir),
 		hairline(cx),
-		optionRow(cx, locales.LocalDirSettingTitle(cx), locales.LocalDirSettingDesc(cx), local),
+		localRow,
 	}
-	if savesThroughDialog() {
-		rows = append(rows, core.Show{
-			When: func() bool { s, ok := a.site(); return ok && !asksEachDownload(s) && !a.canWrite.Get() },
-			Then: func(cx *core.Scope) core.Node {
-				return txt(cx, locales.LocalDirNeedAccess(cx), theme.TypeCaption, cMuted)
-			}})
-	}
-	return rows
 }
 
 // aboutRows are the cache and what the app is.

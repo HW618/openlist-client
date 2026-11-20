@@ -197,7 +197,14 @@ func (a *App) issueCard(cx *core.Scope, th theme.Colors, is accessIssue) core.No
 	switch is.Kind {
 	case access.Folder:
 		title, desc = locales.AccessFolderTitle(cx), locales.AccessFolderDesc(cx, is.Target)
-		act(locales.AccessChooseFolder(cx), lucide.FolderOpen, "access-choose", func() { a.closeSheet(); a.pickLocalDir() })
+		act(locales.AccessChooseFolder(cx), lucide.FolderOpen, "access-choose", func() {
+			a.closeSheet()
+			if s, ok := a.site(); ok {
+				a.openDownloadSaveLocationPicker(s)
+			} else {
+				a.pickLocalDir()
+			}
+		})
 		act(locales.AccessOpenSettings(cx), lucide.Settings, "access-settings", openSettings)
 	case access.Network:
 		title, desc = locales.AccessNetworkTitle(cx), locales.AccessNetworkDesc(cx, is.Target)

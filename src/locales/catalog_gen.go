@@ -231,6 +231,7 @@ const (
 	textToastRenamed
 	textToastSiteRemoved
 	textToastCacheCleared
+	textToastFolderAuthorized
 	textToastNoDone
 	textToastClearedDone
 	textToastOfflineCleared
@@ -371,6 +372,10 @@ const (
 	textOfflineDirDesc
 	textLocalDirSettingTitle
 	textLocalDirSettingDesc
+	textLocalDirSettingDescTap
+	textLocalDirSettingDescWeb
+	textLocalDirSettingDescNeedAuth
+	textLocalDirSettingDescGranted
 	textCacheTitle
 	textCacheEmpty
 	textClearCache
@@ -407,6 +412,11 @@ const (
 	textLocalDirAskDesc
 	textLocalDirNeedAccess
 	textLocalDirNoPickerToast
+	textFolderAuthTitle
+	textFolderAuthDesc
+	textFolderAuthTitleGeneric
+	textFolderAuthDescGeneric
+	textFolderAuthGrant
 	textSaveCancelled
 	textAccessTitle
 	textAccessIntro
@@ -510,6 +520,7 @@ var keyOfText = [numTexts]string{
 	"toastRenamed",
 	"toastSiteRemoved",
 	"toastCacheCleared",
+	"toastFolderAuthorized",
 	"toastNoDone",
 	"toastClearedDone",
 	"toastOfflineCleared",
@@ -650,6 +661,10 @@ var keyOfText = [numTexts]string{
 	"offlineDirDesc",
 	"localDirSettingTitle",
 	"localDirSettingDesc",
+	"localDirSettingDescTap",
+	"localDirSettingDescWeb",
+	"localDirSettingDescNeedAuth",
+	"localDirSettingDescGranted",
 	"cacheTitle",
 	"cacheEmpty",
 	"clearCache",
@@ -686,6 +701,11 @@ var keyOfText = [numTexts]string{
 	"localDirAskDesc",
 	"localDirNeedAccess",
 	"localDirNoPickerToast",
+	"folderAuthTitle",
+	"folderAuthDesc",
+	"folderAuthTitleGeneric",
+	"folderAuthDescGeneric",
+	"folderAuthGrant",
 	"saveCancelled",
 	"accessTitle",
 	"accessIntro",
@@ -787,6 +807,7 @@ var textsEn = i18n.NewTexts(""+
 	"Renamed"+
 	"Site removed"+
 	"Local cache cleared"+
+	"Access to files on this device is allowed"+
 	"No finished tasks"+
 	"Finished tasks cleared"+
 	"Finished offline tasks cleared"+
@@ -862,7 +883,7 @@ var textsEn = i18n.NewTexts(""+
 	"New name *"+
 	"Enter a name"+
 	"Save"+
-	"Download folder on this device"+
+	"Choose download save location"+
 	"Folder *"+
 	"Enter a valid folder path"+
 	"Choose with the system dialog"+
@@ -925,8 +946,12 @@ var textsEn = i18n.NewTexts(""+
 	"Where the app opens, and where it goes when you switch site"+
 	"Offline download folder"+
 	"Where offline downloads started from the root are saved"+
-	"Download folder on this device"+
-	"Defaults to the system Downloads folder; tap Change to pick another"+
+	"Download save location"+
+	"Defaults to the system Downloads folder; tap to change"+
+	"Tap to open the system folder picker"+
+	"Tap to choose a folder the browser may write to"+
+	"Authorize file access first, then choose a save folder"+
+	"Authorized; tap to change the save folder"+
 	"Thumbnail and folder cache"+
 	"Cache is empty"+
 	"Clear cache"+
@@ -963,6 +988,11 @@ var textsEn = i18n.NewTexts(""+
 	"Choose where to save in the system's save dialog"+
 	"This app may not write in this folder, so downloads use the system's save dialog. Allow \"All files access\" in System settings › Apps › OpenList › Permissions, then try again."+
 	"This folder can't be written to. Choose another."+
+	"\"All files access\" is required"+
+	"On Android, choosing a download save location needs \"All files access\". Open system settings to allow it, then continue. Without it, the app cannot reliably write to the folder you pick."+
+	"Authorization needed to choose a download save location"+
+	"Allow OpenList to access folders on this device, then choose a download save location."+
+	"Authorize"+
 	"Save cancelled"+
 	"Permissions needed"+
 	"The app can't do everything it needs yet."+
@@ -1061,6 +1091,7 @@ var textsEn = i18n.NewTexts(""+
 		7,
 		12,
 		19,
+		41,
 		17,
 		22,
 		30,
@@ -1136,7 +1167,7 @@ var textsEn = i18n.NewTexts(""+
 		10,
 		12,
 		4,
-		30,
+		29,
 		8,
 		25,
 		29,
@@ -1199,8 +1230,12 @@ var textsEn = i18n.NewTexts(""+
 		59,
 		23,
 		55,
-		30,
-		67,
+		22,
+		54,
+		36,
+		47,
+		54,
+		41,
 		26,
 		14,
 		11,
@@ -1237,6 +1272,11 @@ var textsEn = i18n.NewTexts(""+
 		48,
 		180,
 		48,
+		30,
+		186,
+		55,
+		86,
+		9,
 		14,
 		18,
 		41,
@@ -1338,6 +1378,7 @@ var textsZhHans = i18n.NewTexts(""+
 	"重命名成功"+
 	"站点已移除"+
 	"本地缓存已清理"+
+	"已授权本机文件访问"+
 	"没有已完成的任务"+
 	"已清空完成记录"+
 	"已清空已完成的离线任务"+
@@ -1413,7 +1454,7 @@ var textsZhHans = i18n.NewTexts(""+
 	"新名称 *"+
 	"名称不能为空"+
 	"确认修改"+
-	"设置本机默认下载位置"+
+	"选择下载保存位置"+
 	"本机保存路径 *"+
 	"请输入有效的本地目录路径"+
 	"使用系统对话框选择"+
@@ -1476,8 +1517,12 @@ var textsZhHans = i18n.NewTexts(""+
 	"打开应用或切换站点时默认进入的目录"+
 	"离线下载默认文件夹"+
 	"在根目录发起离线下载时的默认保存位置"+
-	"本机默认下载位置"+
+	"下载保存位置"+
 	"默认为系统下载文件夹，点击更改"+
+	"点击弹出系统文件夹选择框"+
+	"点击选择浏览器可写入的文件夹"+
+	"需先授权本机文件访问，再选择保存文件夹"+
+	"已授权，点击更改保存文件夹"+
 	"本地缩略图与目录缓存"+
 	"缓存已清空"+
 	"清理缓存"+
@@ -1514,6 +1559,11 @@ var textsZhHans = i18n.NewTexts(""+
 	"用系统保存对话框选择保存位置"+
 	"没有权限写入此文件夹，下载时将改用系统保存对话框。请在系统设置 › 应用 › OpenList › 权限中允许“所有文件访问”后重试。"+
 	"无法写入所选文件夹，请换一个。"+
+	"需要「所有文件访问」权限"+
+	"安卓上选择下载保存位置需要「所有文件访问」权限。请前往系统设置授权后继续；未授权时无法可靠写入所选文件夹。"+
+	"需要授权才能选择下载保存位置"+
+	"请允许 OpenList 访问本机文件夹，然后再选择下载保存位置。"+
+	"去授权"+
 	"已取消保存"+
 	"需要权限"+
 	"应用目前还缺少一些必需的权限。"+
@@ -1612,6 +1662,7 @@ var textsZhHans = i18n.NewTexts(""+
 		15,
 		15,
 		21,
+		27,
 		24,
 		21,
 		33,
@@ -1687,7 +1738,7 @@ var textsZhHans = i18n.NewTexts(""+
 		11,
 		18,
 		12,
-		30,
+		24,
 		20,
 		36,
 		27,
@@ -1750,8 +1801,12 @@ var textsZhHans = i18n.NewTexts(""+
 		51,
 		27,
 		54,
-		24,
+		18,
 		45,
+		36,
+		42,
+		57,
+		39,
 		30,
 		15,
 		12,
@@ -1788,6 +1843,11 @@ var textsZhHans = i18n.NewTexts(""+
 		42,
 		173,
 		45,
+		36,
+		159,
+		42,
+		79,
+		9,
 		15,
 		12,
 		45,
@@ -3049,7 +3109,7 @@ func (msgs Messages) ToastOfflineDir(dir string) string {
 	}
 }
 
-// ToastLocalDir says "Downloads on this device go to {dir}"
+// ToastLocalDir says "Download save location set to {dir}"
 // in the language the app shows under cx.
 func ToastLocalDir(cx *core.Scope, dir string) string { return For(cx).ToastLocalDir(dir) }
 
@@ -3064,12 +3124,19 @@ func (msgs Messages) ToastLocalDir(dir string) string {
 		}
 		switch lang {
 		case "", "en":
-			return "Downloads on this device go to " + msgs.arg(dir)
+			return "Download save location set to " + msgs.arg(dir)
 		case "zh-Hans":
-			return "本机默认下载位置已设为：" + dir
+			return "下载保存位置已设为：" + dir
 		}
 	}
 }
+
+// ToastFolderAuthorized says "Access to files on this device is allowed"
+// in the language the app shows under cx.
+func ToastFolderAuthorized(cx *core.Scope) string { return For(cx).ToastFolderAuthorized() }
+
+// ToastFolderAuthorized is the package's ToastFolderAuthorized in the language of msgs.
+func (msgs Messages) ToastFolderAuthorized() string { return msgs.text(textToastFolderAuthorized) }
 
 // ToastRetrying says "Retrying {name}"
 // in the language the app shows under cx.
@@ -3830,7 +3897,7 @@ func ConfirmRename(cx *core.Scope) string { return For(cx).ConfirmRename() }
 // ConfirmRename is the package's ConfirmRename in the language of msgs.
 func (msgs Messages) ConfirmRename() string { return msgs.text(textConfirmRename) }
 
-// LocalDirTitle says "Download folder on this device"
+// LocalDirTitle says "Choose download save location"
 // in the language the app shows under cx.
 func LocalDirTitle(cx *core.Scope) string { return For(cx).LocalDirTitle() }
 
@@ -4581,19 +4648,51 @@ func OfflineDirDesc(cx *core.Scope) string { return For(cx).OfflineDirDesc() }
 // OfflineDirDesc is the package's OfflineDirDesc in the language of msgs.
 func (msgs Messages) OfflineDirDesc() string { return msgs.text(textOfflineDirDesc) }
 
-// LocalDirSettingTitle says "Download folder on this device"
+// LocalDirSettingTitle says "Download save location"
 // in the language the app shows under cx.
 func LocalDirSettingTitle(cx *core.Scope) string { return For(cx).LocalDirSettingTitle() }
 
 // LocalDirSettingTitle is the package's LocalDirSettingTitle in the language of msgs.
 func (msgs Messages) LocalDirSettingTitle() string { return msgs.text(textLocalDirSettingTitle) }
 
-// LocalDirSettingDesc says "Defaults to the system Downloads folder; tap Change to pick another"
+// LocalDirSettingDesc says "Defaults to the system Downloads folder; tap to change"
 // in the language the app shows under cx.
 func LocalDirSettingDesc(cx *core.Scope) string { return For(cx).LocalDirSettingDesc() }
 
 // LocalDirSettingDesc is the package's LocalDirSettingDesc in the language of msgs.
 func (msgs Messages) LocalDirSettingDesc() string { return msgs.text(textLocalDirSettingDesc) }
+
+// LocalDirSettingDescTap says "Tap to open the system folder picker"
+// in the language the app shows under cx.
+func LocalDirSettingDescTap(cx *core.Scope) string { return For(cx).LocalDirSettingDescTap() }
+
+// LocalDirSettingDescTap is the package's LocalDirSettingDescTap in the language of msgs.
+func (msgs Messages) LocalDirSettingDescTap() string { return msgs.text(textLocalDirSettingDescTap) }
+
+// LocalDirSettingDescWeb says "Tap to choose a folder the browser may write to"
+// in the language the app shows under cx.
+func LocalDirSettingDescWeb(cx *core.Scope) string { return For(cx).LocalDirSettingDescWeb() }
+
+// LocalDirSettingDescWeb is the package's LocalDirSettingDescWeb in the language of msgs.
+func (msgs Messages) LocalDirSettingDescWeb() string { return msgs.text(textLocalDirSettingDescWeb) }
+
+// LocalDirSettingDescNeedAuth says "Authorize file access first, then choose a save folder"
+// in the language the app shows under cx.
+func LocalDirSettingDescNeedAuth(cx *core.Scope) string { return For(cx).LocalDirSettingDescNeedAuth() }
+
+// LocalDirSettingDescNeedAuth is the package's LocalDirSettingDescNeedAuth in the language of msgs.
+func (msgs Messages) LocalDirSettingDescNeedAuth() string {
+	return msgs.text(textLocalDirSettingDescNeedAuth)
+}
+
+// LocalDirSettingDescGranted says "Authorized; tap to change the save folder"
+// in the language the app shows under cx.
+func LocalDirSettingDescGranted(cx *core.Scope) string { return For(cx).LocalDirSettingDescGranted() }
+
+// LocalDirSettingDescGranted is the package's LocalDirSettingDescGranted in the language of msgs.
+func (msgs Messages) LocalDirSettingDescGranted() string {
+	return msgs.text(textLocalDirSettingDescGranted)
+}
 
 // CacheTitle says "Thumbnail and folder cache"
 // in the language the app shows under cx.
@@ -4915,6 +5014,41 @@ func LocalDirNoPickerToast(cx *core.Scope) string { return For(cx).LocalDirNoPic
 // LocalDirNoPickerToast is the package's LocalDirNoPickerToast in the language of msgs.
 func (msgs Messages) LocalDirNoPickerToast() string { return msgs.text(textLocalDirNoPickerToast) }
 
+// FolderAuthTitle says "\"All files access\" is required"
+// in the language the app shows under cx.
+func FolderAuthTitle(cx *core.Scope) string { return For(cx).FolderAuthTitle() }
+
+// FolderAuthTitle is the package's FolderAuthTitle in the language of msgs.
+func (msgs Messages) FolderAuthTitle() string { return msgs.text(textFolderAuthTitle) }
+
+// FolderAuthDesc says "On Android, choosing a download save location needs \"All files access\". Open system settings to allow it, then continue. Without it, the app cannot reliably write to the folder you pick."
+// in the language the app shows under cx.
+func FolderAuthDesc(cx *core.Scope) string { return For(cx).FolderAuthDesc() }
+
+// FolderAuthDesc is the package's FolderAuthDesc in the language of msgs.
+func (msgs Messages) FolderAuthDesc() string { return msgs.text(textFolderAuthDesc) }
+
+// FolderAuthTitleGeneric says "Authorization needed to choose a download save location"
+// in the language the app shows under cx.
+func FolderAuthTitleGeneric(cx *core.Scope) string { return For(cx).FolderAuthTitleGeneric() }
+
+// FolderAuthTitleGeneric is the package's FolderAuthTitleGeneric in the language of msgs.
+func (msgs Messages) FolderAuthTitleGeneric() string { return msgs.text(textFolderAuthTitleGeneric) }
+
+// FolderAuthDescGeneric says "Allow OpenList to access folders on this device, then choose a download save location."
+// in the language the app shows under cx.
+func FolderAuthDescGeneric(cx *core.Scope) string { return For(cx).FolderAuthDescGeneric() }
+
+// FolderAuthDescGeneric is the package's FolderAuthDescGeneric in the language of msgs.
+func (msgs Messages) FolderAuthDescGeneric() string { return msgs.text(textFolderAuthDescGeneric) }
+
+// FolderAuthGrant says "Authorize"
+// in the language the app shows under cx.
+func FolderAuthGrant(cx *core.Scope) string { return For(cx).FolderAuthGrant() }
+
+// FolderAuthGrant is the package's FolderAuthGrant in the language of msgs.
+func (msgs Messages) FolderAuthGrant() string { return msgs.text(textFolderAuthGrant) }
+
 // SaveCancelled says "Save cancelled"
 // in the language the app shows under cx.
 func SaveCancelled(cx *core.Scope) string { return For(cx).SaveCancelled() }
@@ -4922,7 +5056,7 @@ func SaveCancelled(cx *core.Scope) string { return For(cx).SaveCancelled() }
 // SaveCancelled is the package's SaveCancelled in the language of msgs.
 func (msgs Messages) SaveCancelled() string { return msgs.text(textSaveCancelled) }
 
-// WebTooLarge says "This file ({size}) is too large for the browser to save directly. Choose a download folder on this device in Settings, then try again."
+// WebTooLarge says "This file ({size}) is too large for the browser to save directly. Choose a download save location in Settings, then try again."
 // in the language the app shows under cx.
 func WebTooLarge(cx *core.Scope, size string) string { return For(cx).WebTooLarge(size) }
 
@@ -4937,9 +5071,9 @@ func (msgs Messages) WebTooLarge(size string) string {
 		}
 		switch lang {
 		case "", "en":
-			return "This file (" + msgs.arg(size) + ") is too large for the browser to save directly. Choose a download folder on this device in Settings, then try again."
+			return "This file (" + msgs.arg(size) + ") is too large for the browser to save directly. Choose a download save location in Settings, then try again."
 		case "zh-Hans":
-			return "文件太大（" + size + "），浏览器无法直接保存。请在设置里选择本机下载文件夹后再试。"
+			return "文件太大（" + size + "），浏览器无法直接保存。请在设置里选择下载保存位置后再试。"
 		}
 	}
 }
