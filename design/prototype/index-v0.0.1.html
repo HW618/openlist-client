@@ -7,17 +7,29 @@
     Transfers 标签 / 离线下载区块 .......... src/app/transfers.go · src/app/offline.go（离线区块仅管理员可见）
     Settings 标签 / 站点列表（默认只显示当前站点，右侧箭头展开，最高 320 滚动） ... src/app/settings.go
     Settings · 通知开关组 .................... src/app/settings.go · 通知偏好（待实现，ROADMAP §1）
+    Settings ·「下载保存位置」点按 → 选目录 ... src/app/settings.go · 本机下载目录（ROADMAP §2 收窄：仅授权+选夹，待实现）
+    「下载保存位置」缺权限 → 先授权再继续选夹 ... src/app/permissions.go · 安卓所有文件访问 / 桌面与网页选夹授权（待实现）
     系统通知点击跳转 ......................... cx.OnNotificationPress → 传输 / 离线下载
     各类底部面板 / 对话框 ................... src/app/sheets.go（宽 ≥ 640 为对话框，否则为底部面板）
     权限对话框 ............................... src/app/permissions.go · src/internal/access
     通知权限被拒引导 ......................... src/app/permissions.go（通知类，待实现）
     预览 / 悬浮按钮 .......................... src/app/preview.go · src/app/fabview.go
+    底栏仅「文件 / 传输 / 设置」............. 无「本机」标签（本机文件浏览页不在本轮范围）
+
+  本轮 ROADMAP §2 收窄范围（仅设计，未进 src/app/）
+    1. 设置 →「下载保存位置」→ 文件夹选择对话框
+    2. 若缺权限 → 授权提示 → 授权后继续选夹
+    3. 底栏保持 文件 / 传输 / 设置
+    不做：可写探测 UI、在系统中显示、已下载角标、本机文件浏览页、远端相对路径落地 UI
 
   演示参数（URL query）
-    ?platform=desktop|web|android   切换“本机默认下载位置”的平台变体
+    ?platform=desktop|web|android   切换「下载保存位置」的平台变体
+    ?tab=files|transfers|settings   启动时打开指定底栏页
+    ?auth=folder                    启动即弹出「授权后继续选夹」提示（安卓最相关）
+    ?pick=1                         启动即打开文件夹选择（会跳过缺权限提示；安卓视为已授权）
     ?perm=folder,network,server,browser,keychain,notifications  启动即弹出对应的权限对话框
     ?notify=1                       演示一条合并后的任务完成通知（可点击跳到传输）
-    （默认）首次启动引导开启通知权限：弹出「允许通知」对话框，点「允许通知」再请求系统权限
+    （默认）首次启动引导开启通知权限；带 ?auth= / ?perm= / ?pick= 时不自动弹出通知引导
 
   布局沿用 OD-LAYOUT-PRIMITIVES v1，样式沿用 Apple Design System 令牌与平台中性手机外壳。
 -->
@@ -1746,12 +1758,12 @@
                       <svg class="od-icon" style="--od-icon-size:14px; flex:none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
                     </button>
                   </div>
-                  <div class="setting-row">
+                  <div class="setting-row" data-testid="download-save-location-row">
                     <div class="od-fill" style="min-width:0">
-                      <div class="setting-title">本机默认下载位置</div>
+                      <div class="setting-title">下载保存位置</div>
                       <div class="setting-desc">默认为系统下载文件夹，点击更改</div>
                     </div>
-                    <button type="button" class="tool-chip setting-value-btn" id="btnPrefLocalDownloadDir" title="设置本机默认下载位置">
+                    <button type="button" class="tool-chip setting-value-btn" id="btnPrefLocalDownloadDir" title="设置下载保存位置">
                       <span class="od-truncate" id="prefLocalDownloadDirLabel">~/Downloads/OpenList</span>
                       <svg class="od-icon" style="--od-icon-size:14px; flex:none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
                     </button>
@@ -1952,6 +1964,9 @@
         sitesExpanded: false,
         platform: (new URLSearchParams(location.search).get('platform') || 'desktop'), // 'desktop' | 'web' | 'android'
         webFolderName: '',
+        androidLocalDir: '/storage/emulated/0/Download/OpenList',
+        // 安卓「所有文件访问」；桌面/网页选夹前也可演示缺权限。true = 已授权可继续选夹
+        folderAccessGranted: (new URLSearchParams(location.search).get('platform') || 'desktop') !== 'android',
         siteStatus: {}, // siteId -> { checking, truth, latency }
         offlineBusy: false,
         moveBrowsePathIds: ['root'],
@@ -2855,18 +2870,19 @@
         prefDefaultFilesDirLabel.textContent = formatPathLabel(siteSettings.defaultFilesPathIds);
         prefDefaultOfflineDirLabel.textContent = formatPathLabel(siteSettings.defaultOfflinePathIds);
 
-        // 本机默认下载位置：默认为系统下载文件夹，点击更改。桌面 / iOS 弹系统文件夹选择框；网页显示所选文件夹（或使用浏览器自带下载）；
-        // Android 的文件夹选择框只读不能写入，所以在设备共享文件夹（下载、文档…）里选，或每次下载时询问
+        // 下载保存位置：点按先检查授权，缺权限则提示授权，再打开文件夹选择（本轮不做可写探测 / 本机浏览页）
         const localBtn = $('#btnPrefLocalDownloadDir');
         const localDesc = localBtn.closest('.setting-row').querySelector('.setting-desc');
         if (state.platform === 'android') {
           localBtn.hidden = false;
           btnClearLocalDir.hidden = true;
-          localDesc.textContent = '默认为系统下载文件夹，点击更改';
+          localDesc.textContent = state.folderAccessGranted
+            ? '已授权，点击更改保存文件夹'
+            : '需先授权本机文件访问，再选择保存文件夹';
           prefLocalDownloadDirLabel.textContent = state.androidLocalDir || '/storage/emulated/0/Download/OpenList';
         } else if (state.platform === 'web') {
           localBtn.hidden = false;
-          localDesc.textContent = '点击弹出系统文件夹选择框';
+          localDesc.textContent = '点击选择浏览器可写入的文件夹';
           prefLocalDownloadDirLabel.textContent = state.webFolderName || '未设置 · 使用浏览器自带下载';
           btnClearLocalDir.hidden = !state.webFolderName;
         } else {
@@ -3311,42 +3327,82 @@
         openSheet(titleMap[mode] || '选择目录', renderDirPickerBody());
       }
 
-      // 设为本机默认下载位置：网页只记录文件夹名（句柄由浏览器保存），桌面 / iOS 记录路径
+      // 下载保存位置：网页只记录文件夹名（句柄由浏览器保存），桌面 / iOS 记录路径
       function setLocalDownloadDir(name) {
         if (state.platform === 'web') state.webFolderName = name;
         else getActiveSiteSettings().localDownloadDir = name;
         renderSettings();
-        showToast(`本机默认下载位置已设为：${name}`);
+        showToast(`下载保存位置已设为：${name}`);
       }
 
-      // Android：在设备共享文件夹里选，或每次下载时用系统保存对话框询问
+      // 缺权限时先授权（安卓「所有文件访问」最相关），授权后再继续选夹
+      function openFolderAuthSheet() {
+        let title = '需要授权才能选择下载保存位置';
+        let desc = '请允许 OpenList 访问本机文件夹，然后再选择下载保存位置。';
+        if (state.platform === 'android') {
+          title = '需要「所有文件访问」权限';
+          desc = '安卓上选择下载保存位置需要「所有文件访问」权限。请前往系统设置授权后继续；未授权时无法可靠写入所选文件夹。';
+        } else if (state.platform === 'web') {
+          title = '需要授权文件夹访问';
+          desc = '浏览器需要你授权一个可写入的文件夹，OpenList 才能把下载保存到该位置（不会访问其它目录）。';
+        } else {
+          title = '需要授权文件夹访问';
+          desc = '请允许 OpenList 访问本机文件夹，然后再选择下载保存位置。';
+        }
+        openSheet(title, sheetFrame(`
+          <div class="access-card" data-testid="folder-auth-prompt">
+            <div class="access-head"><span class="tile">${svgIcon('shieldAlert', 18)}</span><span>${escapeHtml(title)}</span></div>
+            <p class="access-desc">${escapeHtml(desc)}</p>
+          </div>`, `
+          <button type="button" class="btn-secondary" id="btnFolderAuthLater" style="flex:1">稍后</button>
+          <button type="button" class="btn-primary" id="btnFolderAuthGrant" style="flex:1">去授权</button>`));
+      }
+
+      // Android：原型用共享文件夹列表代替系统选择器（截图可用）
       function openAndroidLocalDirSheet() {
         const base = '/storage/emulated/0/';
-        openSheet('设置本机默认下载位置', sheetFrame(`
-          <div class="od-stack" style="--od-gap:8px">
+        openSheet('选择下载保存位置', sheetFrame(`
+          <div class="od-stack" style="--od-gap:8px" data-testid="download-folder-picker">
             ${['Download', 'Documents', 'Pictures', 'Movies', 'Music'].map((n) => optionBtn(`data-android-dir="${base}${n}/OpenList"`, 'folderOpen', `${n}/OpenList`)).join('')}
             ${optionBtn('data-android-dir="@ask"', 'download', '每次下载时询问')}
           </div>
-          <div class="setting-desc" style="margin-top:8px">若提示没有写入权限，请在 系统设置 › 应用 › OpenList › 权限 中允许“所有文件访问”；否则下载时改用系统保存对话框。</div>`));
+          <div class="setting-desc" style="margin-top:8px">原型面板，代替系统文件夹选择器。真机实现会打开系统选夹界面。</div>`));
       }
 
-      // 弹出系统文件夹选择框；Android 改为在共享文件夹里选
-      async function pickLocalDirectoryWithDialog() {
-        if (state.platform === 'android') {
-          openAndroidLocalDirSheet();
+      // 桌面 / 网页：原型文件夹选择面板（截图可用，不依赖真实系统选夹）
+      function openPrototypeFolderPickSheet() {
+        const options = state.platform === 'web'
+          ? [
+              { path: 'Downloads', label: 'Downloads' },
+              { path: 'Documents', label: 'Documents' },
+              { path: 'OpenList', label: 'OpenList' }
+            ]
+          : [
+              { path: '~/Downloads/OpenList', label: 'Downloads/OpenList' },
+              { path: '~/Documents/OpenList', label: 'Documents/OpenList' },
+              { path: '~/Desktop/OpenList', label: 'Desktop/OpenList' }
+            ];
+        openSheet('选择下载保存位置', sheetFrame(`
+          <div class="od-stack" style="--od-gap:8px" data-testid="download-folder-picker">
+            ${options.map((o) => optionBtn(`data-proto-local-dir="${escapeHtml(o.path)}"`, 'folderOpen', o.label)).join('')}
+          </div>
+          <div class="setting-desc" style="margin-top:8px">原型面板，代替系统文件夹选择器。真机实现会打开系统选夹界面。</div>`, `
+          <button type="button" class="btn-secondary" id="btnCancelSheet" style="flex:1">取消</button>`));
+      }
+
+      // 已授权后打开选夹；原型始终用面板，便于截图（不依赖真实系统选夹）
+      function openDownloadSaveLocationPicker() {
+        if (state.platform === 'android') openAndroidLocalDirSheet();
+        else openPrototypeFolderPickSheet();
+      }
+
+      // 设置 →「下载保存位置」：缺权限先授权，再继续选夹
+      function requestDownloadSaveLocation() {
+        if (!state.folderAccessGranted) {
+          openFolderAuthSheet();
           return;
         }
-        if (typeof window.showDirectoryPicker === 'function' && location.protocol !== 'file:') {
-          try {
-            const dirHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
-            if (dirHandle && dirHandle.name) setLocalDownloadDir(dirHandle.name);
-            return;
-          } catch (err) {
-            if (err && err.name === 'AbortError') return;
-          }
-        }
-        if (inpLocalDirPicker) inpLocalDirPicker.click();
-        else showToast('当前浏览器无法选择保存文件夹，请使用 Chrome 或 Edge。');
+        openDownloadSaveLocationPicker();
       }
 
       function renderBatchMoveBody() {
@@ -3947,7 +4003,7 @@
 
       $('#btnPrefDefaultFilesDir').addEventListener('click', () => openDirPicker('defaultFiles'));
       $('#btnPrefDefaultOfflineDir').addEventListener('click', () => openDirPicker('defaultOffline'));
-      $('#btnPrefLocalDownloadDir').addEventListener('click', pickLocalDirectoryWithDialog);
+      $('#btnPrefLocalDownloadDir').addEventListener('click', requestDownloadSaveLocation);
       btnClearLocalDir.addEventListener('click', () => {
         state.webFolderName = '';
         renderSettings();
@@ -4010,7 +4066,25 @@
           state.androidLocalDir = dir === '@ask' ? '每次下载时询问' : dir;
           closeSheet();
           renderSettings();
-          showToast(`本机默认下载位置已设为：${state.androidLocalDir}`);
+          showToast(`下载保存位置已设为：${state.androidLocalDir}`);
+          return;
+        }
+        const protoLocalDir = e.target.closest('[data-proto-local-dir]');
+        if (protoLocalDir) {
+          closeSheet();
+          setLocalDownloadDir(protoLocalDir.dataset.protoLocalDir);
+          return;
+        }
+        if (e.target.id === 'btnFolderAuthLater') {
+          closeSheet();
+          return;
+        }
+        if (e.target.id === 'btnFolderAuthGrant') {
+          state.folderAccessGranted = true;
+          closeSheet();
+          renderSettings();
+          showToast('已授权本机文件访问');
+          openDownloadSaveLocationPicker();
           return;
         }
         const quick = e.target.closest('[data-quick]');
@@ -4025,7 +4099,7 @@
         const access = e.target.closest('[data-access]');
         if (access) {
           const k = access.dataset.access;
-          if (k === 'choose') { closeSheet(); pickLocalDirectoryWithDialog(); }
+          if (k === 'choose') { closeSheet(); requestDownloadSaveLocation(); }
           else if (k === 'settings') showToast('无法从这里打开系统设置，请手动打开并允许本应用。');
           else if (k === 'signin') openSignInSheet();
           else if (k === 'allow') { closeSheet(); showToast('已授权访问该文件夹'); }
@@ -4428,9 +4502,18 @@
       renderFiles();
       updateTransferBadge();
 
-      // 演示：?perm=folder|network|server|browser|keychain|notifications（可逗号分隔）启动即弹出权限对话框
+      // 演示：?tab= / ?auth=folder / ?pick=1 / ?perm=... / ?notify=1
       const bootParams = new URLSearchParams(location.search);
       const permParam = bootParams.get('perm');
+      const authParam = bootParams.get('auth');
+      const pickParam = bootParams.get('pick');
+      const tabParam = bootParams.get('tab');
+      const skipNotifyGuide = !!(permParam || authParam || pickParam);
+
+      if (tabParam === 'files' || tabParam === 'transfers' || tabParam === 'settings') {
+        setActiveTab(tabParam);
+      }
+
       if (permParam) {
         const site = getActiveSite();
         const samples = {
@@ -4447,11 +4530,32 @@
         const issues = permParam.split(',').map((k) => samples[k]).filter(Boolean);
         if (issues.length) openPermissionSheet(issues);
       }
+
+      // ?auth=folder：启动即弹出授权提示（安卓最相关）；不自动选夹
+      if (authParam === 'folder' && pickParam !== '1') {
+        if (tabParam !== 'settings' && tabParam !== 'files' && tabParam !== 'transfers') {
+          setActiveTab('settings');
+        }
+        state.folderAccessGranted = false;
+        renderSettings();
+        setTimeout(() => openFolderAuthSheet(), 350);
+      }
+
+      // ?pick=1：视为已授权并打开文件夹选择（跳过缺权限提示）
+      if (pickParam === '1') {
+        if (tabParam !== 'settings' && tabParam !== 'files' && tabParam !== 'transfers') {
+          setActiveTab('settings');
+        }
+        state.folderAccessGranted = true;
+        renderSettings();
+        setTimeout(() => openDownloadSaveLocationPicker(), 350);
+      }
+
       if (bootParams.get('notify') === '1') {
         setTimeout(() => showSysNotify('3 个文件已下载', '点击查看传输记录', 'transfer:done'), 400);
       }
-      // 首次启动：引导开启通知（不必等到第一个任务完成）。?perm= 已含 notifications 时不重复弹出。
-      if (!state.notifyAsked && !permParam) {
+      // 首次启动：引导开启通知。带 ?auth= / ?perm= / ?pick= 时不自动弹出通知引导。
+      if (!state.notifyAsked && !skipNotifyGuide) {
         state.notifyAsked = true;
         setTimeout(() => openPermissionSheet([{ kind: 'notifications', detail: 'guide', target: '' }]), 500);
       }
