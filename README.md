@@ -8,7 +8,7 @@ A lightweight, cross-platform client for [OpenList](https://github.com/OpenListT
 
 ## Features
 
-Several servers (each with its own folders and download settings), browsing with breadcrumbs, sorting, list and grid views, search below the folder or through the whole server, selection with batch move and delete, a floating menu for new folders and files, upload and download queues, offline downloads with their progress, file preview, and permission checks with guidance.
+Several servers (each with its own folders and download settings), browsing with breadcrumbs, sorting, list and grid views, search below the folder or through the whole server, selection with batch move and delete, a floating menu for new folders and files, upload and download queues, offline downloads with their progress, system notifications when transfers or offline tasks finish or fail (with Settings toggles; the app asks for permission on first launch), file preview, and permission checks with guidance.
 
 ## Signing in and where logins are kept
 
@@ -22,7 +22,7 @@ A login stays across restarts and is only deleted when you press **Sign out** on
 | Android | AES-GCM with a key in the Android Keystore |
 | Web | Memory only: you sign in again after a reload |
 
-Tokens are only sent to the server's own host, and not over plain `http` when the server is reached over `https`.
+Tokens are only sent to the server's own host, and not over plain `http` when the server is reached over `https`. The app ID (`io.github.hw618.openlistclient` in `nsgo.yaml`) is also the secure-store service name; tokens kept under the previous ID `dev.nsgo.openlistclient` are copied into the new service on launch (desktop keychains). Changing the Android package name installs as a separate app, so those tokens cannot move with it.
 
 ## Downloads
 

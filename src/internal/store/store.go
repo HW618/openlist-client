@@ -86,6 +86,25 @@ type Prefs struct {
 	View     ViewMode `json:"view"`
 	Sort     SortKey  `json:"sort"`
 	SortDesc bool     `json:"sortDesc,omitempty"`
+	// Notifications are task-completion notification toggles. When Set is
+	// false (older prefs or a first run), Master/Success/Failure default on.
+	Notifications NotifyPrefs `json:"notifications,omitempty"`
+}
+
+// NotifyPrefs are whether the app shows system notifications for transfers
+// and offline tasks.
+type NotifyPrefs struct {
+	// Set is true once defaults have been written or the user changed a
+	// toggle; when false, Master/Success/Failure are treated as on.
+	Set bool `json:"set,omitempty"`
+	// Master is the overall switch.
+	Master bool `json:"master"`
+	// Success and Failure control which outcomes notify when Master is on.
+	Success bool `json:"success"`
+	Failure bool `json:"failure"`
+	// Asked is whether the app has already guided the user to grant
+	// notification permission (first launch or Settings).
+	Asked bool `json:"asked,omitempty"`
 }
 
 // DefaultPrefs are the preferences of a first run.
@@ -100,6 +119,38 @@ func (p Prefs) Fix() Prefs {
 		p.Sort = SortName
 	}
 	return p
+}
+
+// NotifyMaster reports whether task notifications are enabled (default on).
+func (p Prefs) NotifyMaster() bool {
+	if !p.Notifications.Set {
+		return true
+	}
+	return p.Notifications.Master
+}
+
+// NotifySuccess reports whether successful tasks notify (default on).
+func (p Prefs) NotifySuccess() bool {
+	if !p.Notifications.Set {
+		return true
+	}
+	return p.Notifications.Success
+}
+
+// NotifyFailure reports whether failed tasks notify (default on).
+func (p Prefs) NotifyFailure() bool {
+	if !p.Notifications.Set {
+		return true
+	}
+	return p.Notifications.Failure
+}
+
+// EnsureNotifyPrefs writes the default-on notification prefs once Set is needed.
+func (p *Prefs) EnsureNotifyPrefs() {
+	if p.Notifications.Set {
+		return
+	}
+	p.Notifications = NotifyPrefs{Set: true, Master: true, Success: true, Failure: true}
 }
 
 // NormalizeURL checks that raw is the address of a server, an http or https

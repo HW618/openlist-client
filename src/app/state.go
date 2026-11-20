@@ -240,6 +240,9 @@ type App struct {
 	uploadMu     sync.Mutex
 	uploadFile   map[string]core.File
 	uploadSeen   map[string]bool // keys of uploads the task list has shown; the engine goroutine's
+	// taskStatus and offlineSeen track prior statuses so Done/Failed notify once.
+	taskStatus  map[string]transfer.Status
+	offlineSeen map[string]int
 
 	// Settings.
 	status       *core.Signal[map[string]siteStatus]
@@ -330,6 +333,8 @@ func newApp(cx *core.Scope, secrets store.Secrets) *App {
 		a.preloadTokens()
 	}
 	a.notified = map[string]bool{}
+	a.taskStatus = map[string]transfer.Status{}
+	a.offlineSeen = map[string]int{}
 	if isWeb() {
 		for _, st := range a.sites.GetUntracked() {
 			id := st.ID
@@ -347,6 +352,10 @@ func newApp(cx *core.Scope, secrets store.Secrets) *App {
 	a.engine = transfer.New(a.runner, a.transfersChanged, a.taskStore.Get())
 	a.lastDone = -1
 	a.syncTasks()
+	a.bindNotifications()
+	if a.prefs.GetUntracked().NotifyMaster() {
+		a.cx.Post(a.pollOffline)
+	}
 	return a
 }
 
@@ -881,8 +890,14 @@ func secretsDirIn(env func(string) string, config func() (string, error)) string
 	return ""
 }
 
+// legacySecretService is the Secrets service name used before the app ID was
+// changed to io.github.hw618.openlistclient. Tokens under it are copied into
+// the current service on first read (desktop keychains). Android package
+// changes are a different app, so the old Keystore is not reachable there.
+const legacySecretService = "dev.nsgo.openlistclient"
+
 // newSecrets keeps the tokens in the platform's secure store, and brings in
-// those an earlier version kept in a file.
+// those an earlier version kept in a file, and those under the previous app ID.
 func newSecrets(cx *core.Scope) store.Secrets {
 	if isWeb() {
 		// An earlier version kept them in the page's plain storage.
@@ -893,5 +908,41 @@ func newSecrets(cx *core.Scope) store.Secrets {
 		f := &store.FileSecrets{Dir: dir}
 		legacy = func() (map[string]string, func()) { return f.All(), f.Wipe }
 	}
-	return newVault(cx.Secrets(), legacy)
+	cur := cx.Secrets()
+	old := cur
+	old.Service = legacySecretService
+	return newVault(migrateSecrets{cur: cur, old: old}, legacy)
+}
+
+// migrateSecrets reads from the current Secrets service, and when an account
+// is missing there, from the previous app ID's service, then copies it over.
+type migrateSecrets struct {
+	cur, old core.Secrets
+}
+
+func (m migrateSecrets) Get(account string) (string, bool, error) {
+	v, ok, err := m.cur.Get(account)
+	if err != nil || ok {
+		return v, ok, err
+	}
+	v, ok, err = m.old.Get(account)
+	if err != nil || !ok || v == "" {
+		return v, ok, err
+	}
+	if err := m.cur.Set(account, v); err != nil {
+		// Still hand the token to the app; a later Set may succeed.
+		return v, true, nil
+	}
+	_ = m.old.Delete(account)
+	return v, true, nil
+}
+
+func (m migrateSecrets) Set(account, value string) error {
+	return m.cur.Set(account, value)
+}
+
+func (m migrateSecrets) Delete(account string) error {
+	err := m.cur.Delete(account)
+	_ = m.old.Delete(account)
+	return err
 }

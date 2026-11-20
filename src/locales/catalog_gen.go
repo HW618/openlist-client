@@ -44,54 +44,60 @@ func For(cx *core.Scope) Messages {
 // its method, for the TSX declarations of the messages
 // (tsx.RegisterMessages).
 var Parameters = map[string][]string{
-	"ItemsCount":          {"count"},
-	"DriverLabel":         {"name"},
-	"MoreActionsLabel":    {"name"},
-	"SelectedCount":       {"count"},
-	"ToastDownloadQueued": {"count"},
-	"ToastLinksCopied":    {"count"},
-	"ToastMoved":          {"count", "folder"},
-	"ToastDeleted":        {"count"},
-	"ToastFolderCreated":  {"name"},
-	"ToastFileCreated":    {"name"},
-	"ToastUploadQueued":   {"count"},
-	"ToastOfflineAdded":   {"dir"},
-	"ToastSwitchedSite":   {"name"},
-	"ToastSiteConnected":  {"name"},
-	"ToastLinkCopied":     {"name"},
-	"ToastSiteOk":         {"name", "latency"},
-	"ToastSiteFail":       {"name"},
-	"ToastFilesDir":       {"dir"},
-	"ToastOfflineDir":     {"dir"},
-	"ToastLocalDir":       {"dir"},
-	"ToastRetrying":       {"name"},
-	"ToastSignedOut":      {"name"},
-	"ToastError":          {"message"},
-	"SignInFailed":        {"message"},
-	"DirChosen":           {"path"},
-	"MoveTitle":           {"count"},
-	"MoveTarget":          {"path"},
-	"DeleteBody":          {"name"},
-	"DeleteBatchBody":     {"count"},
-	"SiteLatency":         {"latency"},
-	"SiteLatencyLine":     {"url", "latency"},
-	"ExpandSites":         {"count"},
-	"CacheUsed":           {"size"},
-	"AboutDesc":           {"version"},
-	"OfflineLoadError":    {"message"},
-	"WebTooLarge":         {"size"},
-	"AccessFolderDesc":    {"dir"},
-	"AccessNetworkDesc":   {"host"},
-	"AccessServerDesc":    {"detail"},
-	"AccessBrowserDesc":   {"detail"},
-	"SiteAuthOk":          {"user", "role"},
-	"SiteAccountDisabled": {"user"},
-	"ToastSiteAuthOk":     {"name", "user", "latency"},
-	"ToastSiteGuest":      {"name", "latency"},
-	"ToastSiteNeedLogin":  {"name"},
-	"ToastSiteDisabled":   {"name", "user"},
-	"ToastSiteFailReason": {"name", "reason"},
-	"SiteStatusLine":      {"url", "status"},
+	"ItemsCount":           {"count"},
+	"DriverLabel":          {"name"},
+	"MoreActionsLabel":     {"name"},
+	"SelectedCount":        {"count"},
+	"ToastDownloadQueued":  {"count"},
+	"ToastLinksCopied":     {"count"},
+	"ToastMoved":           {"count", "folder"},
+	"ToastDeleted":         {"count"},
+	"ToastFolderCreated":   {"name"},
+	"ToastFileCreated":     {"name"},
+	"ToastUploadQueued":    {"count"},
+	"ToastOfflineAdded":    {"dir"},
+	"ToastSwitchedSite":    {"name"},
+	"ToastSiteConnected":   {"name"},
+	"ToastLinkCopied":      {"name"},
+	"ToastSiteOk":          {"name", "latency"},
+	"ToastSiteFail":        {"name"},
+	"ToastFilesDir":        {"dir"},
+	"ToastOfflineDir":      {"dir"},
+	"ToastLocalDir":        {"dir"},
+	"ToastRetrying":        {"name"},
+	"ToastSignedOut":       {"name"},
+	"ToastError":           {"message"},
+	"SignInFailed":         {"message"},
+	"DirChosen":            {"path"},
+	"MoveTitle":            {"count"},
+	"MoveTarget":           {"path"},
+	"DeleteBody":           {"name"},
+	"DeleteBatchBody":      {"count"},
+	"NotifyDownloadDone":   {"count"},
+	"NotifyUploadDone":     {"count"},
+	"NotifyTransferBoth":   {"count"},
+	"NotifyTransferFailed": {"count"},
+	"NotifyOfflineDone":    {"count"},
+	"NotifyOfflineFailed":  {"count"},
+	"SiteLatency":          {"latency"},
+	"SiteLatencyLine":      {"url", "latency"},
+	"ExpandSites":          {"count"},
+	"CacheUsed":            {"size"},
+	"AboutDesc":            {"version"},
+	"OfflineLoadError":     {"message"},
+	"WebTooLarge":          {"size"},
+	"AccessFolderDesc":     {"dir"},
+	"AccessNetworkDesc":    {"host"},
+	"AccessServerDesc":     {"detail"},
+	"AccessBrowserDesc":    {"detail"},
+	"SiteAuthOk":           {"user", "role"},
+	"SiteAccountDisabled":  {"user"},
+	"ToastSiteAuthOk":      {"name", "user", "latency"},
+	"ToastSiteGuest":       {"name", "latency"},
+	"ToastSiteNeedLogin":   {"name"},
+	"ToastSiteDisabled":    {"name", "user"},
+	"ToastSiteFailReason":  {"name", "reason"},
+	"SiteStatusLine":       {"url", "status"},
 }
 
 // Translation is a language's messages another package supplies:
@@ -99,55 +105,61 @@ var Parameters = map[string][]string{
 // of the others; a key or a field left out leaves the message to the
 // catalog.
 type Translation struct {
-	Texts               map[string]string
-	ItemsCount          func(count int) string
-	DriverLabel         func(name string) string
-	MoreActionsLabel    func(name string) string
-	SelectedCount       func(count int) string
-	ToastDownloadQueued func(count int) string
-	ToastLinksCopied    func(count int) string
-	ToastMoved          func(count int, folder string) string
-	ToastDeleted        func(count int) string
-	ToastFolderCreated  func(name string) string
-	ToastFileCreated    func(name string) string
-	ToastUploadQueued   func(count int) string
-	ToastOfflineAdded   func(dir string) string
-	ToastSwitchedSite   func(name string) string
-	ToastSiteConnected  func(name string) string
-	ToastLinkCopied     func(name string) string
-	ToastSiteOk         func(name string, latency string) string
-	ToastSiteFail       func(name string) string
-	ToastFilesDir       func(dir string) string
-	ToastOfflineDir     func(dir string) string
-	ToastLocalDir       func(dir string) string
-	ToastRetrying       func(name string) string
-	ToastSignedOut      func(name string) string
-	ToastError          func(message string) string
-	SignInFailed        func(message string) string
-	DirChosen           func(path string) string
-	MoveTitle           func(count int) string
-	MoveTarget          func(path string) string
-	DeleteBody          func(name string) string
-	DeleteBatchBody     func(count int) string
-	SiteLatency         func(latency string) string
-	SiteLatencyLine     func(url string, latency string) string
-	ExpandSites         func(count int) string
-	CacheUsed           func(size string) string
-	AboutDesc           func(version string) string
-	OfflineLoadError    func(message string) string
-	WebTooLarge         func(size string) string
-	AccessFolderDesc    func(dir string) string
-	AccessNetworkDesc   func(host string) string
-	AccessServerDesc    func(detail string) string
-	AccessBrowserDesc   func(detail string) string
-	SiteAuthOk          func(user string, role string) string
-	SiteAccountDisabled func(user string) string
-	ToastSiteAuthOk     func(name string, user string, latency string) string
-	ToastSiteGuest      func(name string, latency string) string
-	ToastSiteNeedLogin  func(name string) string
-	ToastSiteDisabled   func(name string, user string) string
-	ToastSiteFailReason func(name string, reason string) string
-	SiteStatusLine      func(url string, status string) string
+	Texts                map[string]string
+	ItemsCount           func(count int) string
+	DriverLabel          func(name string) string
+	MoreActionsLabel     func(name string) string
+	SelectedCount        func(count int) string
+	ToastDownloadQueued  func(count int) string
+	ToastLinksCopied     func(count int) string
+	ToastMoved           func(count int, folder string) string
+	ToastDeleted         func(count int) string
+	ToastFolderCreated   func(name string) string
+	ToastFileCreated     func(name string) string
+	ToastUploadQueued    func(count int) string
+	ToastOfflineAdded    func(dir string) string
+	ToastSwitchedSite    func(name string) string
+	ToastSiteConnected   func(name string) string
+	ToastLinkCopied      func(name string) string
+	ToastSiteOk          func(name string, latency string) string
+	ToastSiteFail        func(name string) string
+	ToastFilesDir        func(dir string) string
+	ToastOfflineDir      func(dir string) string
+	ToastLocalDir        func(dir string) string
+	ToastRetrying        func(name string) string
+	ToastSignedOut       func(name string) string
+	ToastError           func(message string) string
+	SignInFailed         func(message string) string
+	DirChosen            func(path string) string
+	MoveTitle            func(count int) string
+	MoveTarget           func(path string) string
+	DeleteBody           func(name string) string
+	DeleteBatchBody      func(count int) string
+	NotifyDownloadDone   func(count int) string
+	NotifyUploadDone     func(count int) string
+	NotifyTransferBoth   func(count int) string
+	NotifyTransferFailed func(count int) string
+	NotifyOfflineDone    func(count int) string
+	NotifyOfflineFailed  func(count int) string
+	SiteLatency          func(latency string) string
+	SiteLatencyLine      func(url string, latency string) string
+	ExpandSites          func(count int) string
+	CacheUsed            func(size string) string
+	AboutDesc            func(version string) string
+	OfflineLoadError     func(message string) string
+	WebTooLarge          func(size string) string
+	AccessFolderDesc     func(dir string) string
+	AccessNetworkDesc    func(host string) string
+	AccessServerDesc     func(detail string) string
+	AccessBrowserDesc    func(detail string) string
+	SiteAuthOk           func(user string, role string) string
+	SiteAccountDisabled  func(user string) string
+	ToastSiteAuthOk      func(name string, user string, latency string) string
+	ToastSiteGuest       func(name string, latency string) string
+	ToastSiteNeedLogin   func(name string) string
+	ToastSiteDisabled    func(name string, user string) string
+	ToastSiteFailReason  func(name string, reason string) string
+	SiteStatusLine       func(url string, status string) string
 }
 
 var supplied = map[string]Translation{}
@@ -324,8 +336,18 @@ const (
 	textSettingsTitle
 	textGroupSites
 	textGroupAppearance
+	textGroupNotifications
 	textGroupPaths
 	textGroupAbout
+	textNotifyMaster
+	textNotifyMasterDesc
+	textNotifySuccess
+	textNotifySuccessDesc
+	textNotifyFailure
+	textNotifyFailureDesc
+	textNotifyLimitsTitle
+	textNotifyLimitsDesc
+	textNotifyOpenTransfers
 	textSiteTimeout
 	textSiteChecking
 	textTestSite
@@ -393,6 +415,9 @@ const (
 	textAccessServerTitle
 	textAccessKeychainTitle
 	textAccessKeychainDesc
+	textAccessNotificationsTitle
+	textAccessNotificationsDesc
+	textAccessAllowNotifications
 	textAccessBrowserTitle
 	textAccessOpenSettings
 	textAccessChooseFolder
@@ -405,6 +430,7 @@ const (
 	textToastFolderAllowed
 	textToastBrowserDownloadOn
 	textToastAccessOk
+	textToastNotifyReady
 	textToastNoFolderPicker
 	textLocalDirNone
 	textSiteRoleAdmin
@@ -589,8 +615,18 @@ var keyOfText = [numTexts]string{
 	"settingsTitle",
 	"groupSites",
 	"groupAppearance",
+	"groupNotifications",
 	"groupPaths",
 	"groupAbout",
+	"notifyMaster",
+	"notifyMasterDesc",
+	"notifySuccess",
+	"notifySuccessDesc",
+	"notifyFailure",
+	"notifyFailureDesc",
+	"notifyLimitsTitle",
+	"notifyLimitsDesc",
+	"notifyOpenTransfers",
 	"siteTimeout",
 	"siteChecking",
 	"testSite",
@@ -658,6 +694,9 @@ var keyOfText = [numTexts]string{
 	"accessServerTitle",
 	"accessKeychainTitle",
 	"accessKeychainDesc",
+	"accessNotificationsTitle",
+	"accessNotificationsDesc",
+	"accessAllowNotifications",
 	"accessBrowserTitle",
 	"accessOpenSettings",
 	"accessChooseFolder",
@@ -670,6 +709,7 @@ var keyOfText = [numTexts]string{
 	"toastFolderAllowed",
 	"toastBrowserDownloadOn",
 	"toastAccessOk",
+	"toastNotifyReady",
 	"toastNoFolderPicker",
 	"localDirNone",
 	"siteRoleAdmin",
@@ -852,8 +892,18 @@ var textsEn = i18n.NewTexts(""+
 	"Sites and settings"+
 	"Saved OpenList sites"+
 	"Appearance and browsing"+
+	"Notifications"+
 	"Folders and downloads"+
 	"Storage and about"+
+	"Task completion notifications"+
+	"System alerts when uploads, downloads or offline tasks finish or fail"+
+	"Notify on success"+
+	"Alert when a task completes; several are merged into one"+
+	"Notify on failure"+
+	"Alert when a task fails"+
+	"Platform limits"+
+	"If the system kills the app, transfers stop and there is no notification. Offline downloads finished on the server while the app is not running also produce none. Linux and the web only show notifications from this run. On Windows, tapping a notification needs an installed build."+
+	"Tap to open Transfers"+
 	"timed out"+
 	"checking"+
 	"Test"+
@@ -921,6 +971,9 @@ var textsEn = i18n.NewTexts(""+
 	"This account is not allowed"+
 	"Can't keep your sign-in safely"+
 	"This system has no Secret Service to keep it in. Install and start GNOME Keyring or KWallet (for example sudo apt install gnome-keyring), sign in to your desktop and choose Check again. Until then your sign-in is kept only until the app closes, and is never written to disk."+
+	"Allow notifications"+
+	"OpenList can notify you when uploads, downloads or offline tasks finish or fail. Allow notifications so you do not have to keep watching the Transfers tab. iOS and Android usually ask only once; if you refuse, turn them on later in System Settings."+
+	"Allow notifications"+
 	"The browser blocked saving files"+
 	"Open System Settings"+
 	"Choose another folder"+
@@ -933,6 +986,7 @@ var textsEn = i18n.NewTexts(""+
 	"Access to the folder is allowed"+
 	"Downloads now use the browser's own download"+
 	"All permissions are in place"+
+	"Notifications are ready"+
 	"This browser can't choose a folder to save in. Try Chrome or Edge."+
 	"Not set · downloads use the browser's own download"+
 	"Admin"+
@@ -1112,8 +1166,18 @@ var textsEn = i18n.NewTexts(""+
 		18,
 		20,
 		23,
+		13,
 		21,
 		17,
+		29,
+		69,
+		17,
+		56,
+		17,
+		23,
+		15,
+		280,
+		21,
 		9,
 		8,
 		4,
@@ -1181,6 +1245,9 @@ var textsEn = i18n.NewTexts(""+
 		27,
 		30,
 		274,
+		19,
+		248,
+		19,
 		32,
 		20,
 		21,
@@ -1193,6 +1260,7 @@ var textsEn = i18n.NewTexts(""+
 		31,
 		44,
 		28,
+		23,
 		66,
 		51,
 		5,
@@ -1375,8 +1443,18 @@ var textsZhHans = i18n.NewTexts(""+
 	"站点与设置"+
 	"已保存的 OpenList 实例"+
 	"外观与浏览偏好"+
+	"通知"+
 	"目录与下载路径"+
 	"存储与关于"+
+	"任务完成通知"+
+	"上传、下载与离线任务完成或失败时发出系统通知"+
+	"成功时通知"+
+	"任务成功完成时提醒；多条合并为一条"+
+	"失败时通知"+
+	"任务失败时提醒"+
+	"平台限制"+
+	"应用被系统杀掉后传输会中断，也就没有通知；离线下载在服务器完成时，应用未运行也收不到。Linux 与网页版只显示本次运行发出的通知。Windows 点击通知需通过安装包安装过本应用。"+
+	"点击查看传输记录"+
 	"超时"+
 	"检测中"+
 	"测试"+
@@ -1444,6 +1522,9 @@ var textsZhHans = i18n.NewTexts(""+
 	"当前账号没有权限"+
 	"无法安全保存登录信息"+
 	"没有找到系统的密钥服务（Secret Service）。请安装并启动 GNOME Keyring 或 KWallet（例如 sudo apt install gnome-keyring），登录桌面后点“重新检查”。在此之前，登录信息只保存到本次运行结束，不会写入磁盘。"+
+	"允许通知"+
+	"上传、下载或离线任务完成或失败时，OpenList 可以发出系统通知，这样就不必一直盯着「传输」页。请允许通知；iOS 与安卓通常只会询问一次。若已拒绝，可稍后在系统设置中开启。"+
+	"允许通知"+
 	"浏览器阻止了保存文件"+
 	"打开系统设置"+
 	"选择其他文件夹"+
@@ -1456,6 +1537,7 @@ var textsZhHans = i18n.NewTexts(""+
 	"已授权访问该文件夹"+
 	"已改用浏览器自带下载"+
 	"权限均已具备"+
+	"通知已就绪"+
 	"当前浏览器无法选择保存文件夹，请使用 Chrome 或 Edge。"+
 	"未设置 · 使用浏览器自带下载"+
 	"管理员"+
@@ -1635,8 +1717,18 @@ var textsZhHans = i18n.NewTexts(""+
 		15,
 		28,
 		21,
+		6,
 		21,
 		15,
+		18,
+		66,
+		15,
+		51,
+		15,
+		21,
+		12,
+		245,
+		24,
 		6,
 		9,
 		6,
@@ -1704,6 +1796,9 @@ var textsZhHans = i18n.NewTexts(""+
 		24,
 		30,
 		266,
+		12,
+		241,
+		12,
 		30,
 		18,
 		21,
@@ -1716,6 +1811,7 @@ var textsZhHans = i18n.NewTexts(""+
 		27,
 		30,
 		18,
+		15,
 		73,
 		40,
 		9,
@@ -1866,6 +1962,24 @@ func Supply(lang string, t Translation) {
 	}
 	if t.DeleteBatchBody != nil {
 		s.DeleteBatchBody = t.DeleteBatchBody
+	}
+	if t.NotifyDownloadDone != nil {
+		s.NotifyDownloadDone = t.NotifyDownloadDone
+	}
+	if t.NotifyUploadDone != nil {
+		s.NotifyUploadDone = t.NotifyUploadDone
+	}
+	if t.NotifyTransferBoth != nil {
+		s.NotifyTransferBoth = t.NotifyTransferBoth
+	}
+	if t.NotifyTransferFailed != nil {
+		s.NotifyTransferFailed = t.NotifyTransferFailed
+	}
+	if t.NotifyOfflineDone != nil {
+		s.NotifyOfflineDone = t.NotifyOfflineDone
+	}
+	if t.NotifyOfflineFailed != nil {
+		s.NotifyOfflineFailed = t.NotifyOfflineFailed
 	}
 	if t.SiteLatency != nil {
 		s.SiteLatency = t.SiteLatency
@@ -3926,6 +4040,13 @@ func GroupAppearance(cx *core.Scope) string { return For(cx).GroupAppearance() }
 // GroupAppearance is the package's GroupAppearance in the language of msgs.
 func (msgs Messages) GroupAppearance() string { return msgs.text(textGroupAppearance) }
 
+// GroupNotifications says "Notifications"
+// in the language the app shows under cx.
+func GroupNotifications(cx *core.Scope) string { return For(cx).GroupNotifications() }
+
+// GroupNotifications is the package's GroupNotifications in the language of msgs.
+func (msgs Messages) GroupNotifications() string { return msgs.text(textGroupNotifications) }
+
 // GroupPaths says "Folders and downloads"
 // in the language the app shows under cx.
 func GroupPaths(cx *core.Scope) string { return For(cx).GroupPaths() }
@@ -3939,6 +4060,293 @@ func GroupAbout(cx *core.Scope) string { return For(cx).GroupAbout() }
 
 // GroupAbout is the package's GroupAbout in the language of msgs.
 func (msgs Messages) GroupAbout() string { return msgs.text(textGroupAbout) }
+
+// NotifyMaster says "Task completion notifications"
+// in the language the app shows under cx.
+func NotifyMaster(cx *core.Scope) string { return For(cx).NotifyMaster() }
+
+// NotifyMaster is the package's NotifyMaster in the language of msgs.
+func (msgs Messages) NotifyMaster() string { return msgs.text(textNotifyMaster) }
+
+// NotifyMasterDesc says "System alerts when uploads, downloads or offline tasks finish or fail"
+// in the language the app shows under cx.
+func NotifyMasterDesc(cx *core.Scope) string { return For(cx).NotifyMasterDesc() }
+
+// NotifyMasterDesc is the package's NotifyMasterDesc in the language of msgs.
+func (msgs Messages) NotifyMasterDesc() string { return msgs.text(textNotifyMasterDesc) }
+
+// NotifySuccess says "Notify on success"
+// in the language the app shows under cx.
+func NotifySuccess(cx *core.Scope) string { return For(cx).NotifySuccess() }
+
+// NotifySuccess is the package's NotifySuccess in the language of msgs.
+func (msgs Messages) NotifySuccess() string { return msgs.text(textNotifySuccess) }
+
+// NotifySuccessDesc says "Alert when a task completes; several are merged into one"
+// in the language the app shows under cx.
+func NotifySuccessDesc(cx *core.Scope) string { return For(cx).NotifySuccessDesc() }
+
+// NotifySuccessDesc is the package's NotifySuccessDesc in the language of msgs.
+func (msgs Messages) NotifySuccessDesc() string { return msgs.text(textNotifySuccessDesc) }
+
+// NotifyFailure says "Notify on failure"
+// in the language the app shows under cx.
+func NotifyFailure(cx *core.Scope) string { return For(cx).NotifyFailure() }
+
+// NotifyFailure is the package's NotifyFailure in the language of msgs.
+func (msgs Messages) NotifyFailure() string { return msgs.text(textNotifyFailure) }
+
+// NotifyFailureDesc says "Alert when a task fails"
+// in the language the app shows under cx.
+func NotifyFailureDesc(cx *core.Scope) string { return For(cx).NotifyFailureDesc() }
+
+// NotifyFailureDesc is the package's NotifyFailureDesc in the language of msgs.
+func (msgs Messages) NotifyFailureDesc() string { return msgs.text(textNotifyFailureDesc) }
+
+// NotifyLimitsTitle says "Platform limits"
+// in the language the app shows under cx.
+func NotifyLimitsTitle(cx *core.Scope) string { return For(cx).NotifyLimitsTitle() }
+
+// NotifyLimitsTitle is the package's NotifyLimitsTitle in the language of msgs.
+func (msgs Messages) NotifyLimitsTitle() string { return msgs.text(textNotifyLimitsTitle) }
+
+// NotifyLimitsDesc says "If the system kills the app, transfers stop and there is no notification. Offline downloads finished on the server while the app is not running also produce none. Linux and the web only show notifications from this run. On Windows, tapping a notification needs an installed build."
+// in the language the app shows under cx.
+func NotifyLimitsDesc(cx *core.Scope) string { return For(cx).NotifyLimitsDesc() }
+
+// NotifyLimitsDesc is the package's NotifyLimitsDesc in the language of msgs.
+func (msgs Messages) NotifyLimitsDesc() string { return msgs.text(textNotifyLimitsDesc) }
+
+// NotifyDownloadDone says "{count, plural, one {# file downloaded} other {# files downloaded}}"
+// in the language the app shows under cx.
+func NotifyDownloadDone(cx *core.Scope, count int) string { return For(cx).NotifyDownloadDone(count) }
+
+// NotifyDownloadDone is the package's NotifyDownloadDone in the language of msgs.
+func (msgs Messages) NotifyDownloadDone(count int) string {
+	if i18n.IsPseudo(msgs.lang) {
+		return i18n.Pseudo(msgs.lang, Messages{lang: Source, mark: true}.NotifyDownloadDone(count))
+	}
+	for lang := msgs.lang; ; lang = i18n.Parent(lang) {
+		if f := supplied[lang].NotifyDownloadDone; f != nil {
+			return f(count)
+		}
+		switch lang {
+		case "", "en":
+			var b strings.Builder
+			switch i18n.Cardinal("en", float64(count)) {
+			case i18n.One:
+				b.WriteString(msgs.arg(i18n.FormatNumber("en", float64(count))))
+				b.WriteString(" file downloaded")
+			default:
+				b.WriteString(msgs.arg(i18n.FormatNumber("en", float64(count))))
+				b.WriteString(" files downloaded")
+			}
+			return b.String()
+		case "zh-Hans":
+			var b strings.Builder
+			switch i18n.Cardinal("zh-Hans", float64(count)) {
+			default:
+				b.WriteString(i18n.FormatNumber("zh-Hans", float64(count)))
+				b.WriteString(" 个文件已下载")
+			}
+			return b.String()
+		}
+	}
+}
+
+// NotifyUploadDone says "{count, plural, one {# file uploaded} other {# files uploaded}}"
+// in the language the app shows under cx.
+func NotifyUploadDone(cx *core.Scope, count int) string { return For(cx).NotifyUploadDone(count) }
+
+// NotifyUploadDone is the package's NotifyUploadDone in the language of msgs.
+func (msgs Messages) NotifyUploadDone(count int) string {
+	if i18n.IsPseudo(msgs.lang) {
+		return i18n.Pseudo(msgs.lang, Messages{lang: Source, mark: true}.NotifyUploadDone(count))
+	}
+	for lang := msgs.lang; ; lang = i18n.Parent(lang) {
+		if f := supplied[lang].NotifyUploadDone; f != nil {
+			return f(count)
+		}
+		switch lang {
+		case "", "en":
+			var b strings.Builder
+			switch i18n.Cardinal("en", float64(count)) {
+			case i18n.One:
+				b.WriteString(msgs.arg(i18n.FormatNumber("en", float64(count))))
+				b.WriteString(" file uploaded")
+			default:
+				b.WriteString(msgs.arg(i18n.FormatNumber("en", float64(count))))
+				b.WriteString(" files uploaded")
+			}
+			return b.String()
+		case "zh-Hans":
+			var b strings.Builder
+			switch i18n.Cardinal("zh-Hans", float64(count)) {
+			default:
+				b.WriteString(i18n.FormatNumber("zh-Hans", float64(count)))
+				b.WriteString(" 个文件已上传")
+			}
+			return b.String()
+		}
+	}
+}
+
+// NotifyTransferBoth says "{count, plural, one {# transfer finished} other {# transfers finished}}"
+// in the language the app shows under cx.
+func NotifyTransferBoth(cx *core.Scope, count int) string { return For(cx).NotifyTransferBoth(count) }
+
+// NotifyTransferBoth is the package's NotifyTransferBoth in the language of msgs.
+func (msgs Messages) NotifyTransferBoth(count int) string {
+	if i18n.IsPseudo(msgs.lang) {
+		return i18n.Pseudo(msgs.lang, Messages{lang: Source, mark: true}.NotifyTransferBoth(count))
+	}
+	for lang := msgs.lang; ; lang = i18n.Parent(lang) {
+		if f := supplied[lang].NotifyTransferBoth; f != nil {
+			return f(count)
+		}
+		switch lang {
+		case "", "en":
+			var b strings.Builder
+			switch i18n.Cardinal("en", float64(count)) {
+			case i18n.One:
+				b.WriteString(msgs.arg(i18n.FormatNumber("en", float64(count))))
+				b.WriteString(" transfer finished")
+			default:
+				b.WriteString(msgs.arg(i18n.FormatNumber("en", float64(count))))
+				b.WriteString(" transfers finished")
+			}
+			return b.String()
+		case "zh-Hans":
+			var b strings.Builder
+			switch i18n.Cardinal("zh-Hans", float64(count)) {
+			default:
+				b.WriteString(i18n.FormatNumber("zh-Hans", float64(count)))
+				b.WriteString(" 个传输已完成")
+			}
+			return b.String()
+		}
+	}
+}
+
+// NotifyTransferFailed says "{count, plural, one {# transfer failed} other {# transfers failed}}"
+// in the language the app shows under cx.
+func NotifyTransferFailed(cx *core.Scope, count int) string {
+	return For(cx).NotifyTransferFailed(count)
+}
+
+// NotifyTransferFailed is the package's NotifyTransferFailed in the language of msgs.
+func (msgs Messages) NotifyTransferFailed(count int) string {
+	if i18n.IsPseudo(msgs.lang) {
+		return i18n.Pseudo(msgs.lang, Messages{lang: Source, mark: true}.NotifyTransferFailed(count))
+	}
+	for lang := msgs.lang; ; lang = i18n.Parent(lang) {
+		if f := supplied[lang].NotifyTransferFailed; f != nil {
+			return f(count)
+		}
+		switch lang {
+		case "", "en":
+			var b strings.Builder
+			switch i18n.Cardinal("en", float64(count)) {
+			case i18n.One:
+				b.WriteString(msgs.arg(i18n.FormatNumber("en", float64(count))))
+				b.WriteString(" transfer failed")
+			default:
+				b.WriteString(msgs.arg(i18n.FormatNumber("en", float64(count))))
+				b.WriteString(" transfers failed")
+			}
+			return b.String()
+		case "zh-Hans":
+			var b strings.Builder
+			switch i18n.Cardinal("zh-Hans", float64(count)) {
+			default:
+				b.WriteString(i18n.FormatNumber("zh-Hans", float64(count)))
+				b.WriteString(" 个传输失败")
+			}
+			return b.String()
+		}
+	}
+}
+
+// NotifyOfflineDone says "{count, plural, one {# offline download finished} other {# offline downloads finished}}"
+// in the language the app shows under cx.
+func NotifyOfflineDone(cx *core.Scope, count int) string { return For(cx).NotifyOfflineDone(count) }
+
+// NotifyOfflineDone is the package's NotifyOfflineDone in the language of msgs.
+func (msgs Messages) NotifyOfflineDone(count int) string {
+	if i18n.IsPseudo(msgs.lang) {
+		return i18n.Pseudo(msgs.lang, Messages{lang: Source, mark: true}.NotifyOfflineDone(count))
+	}
+	for lang := msgs.lang; ; lang = i18n.Parent(lang) {
+		if f := supplied[lang].NotifyOfflineDone; f != nil {
+			return f(count)
+		}
+		switch lang {
+		case "", "en":
+			var b strings.Builder
+			switch i18n.Cardinal("en", float64(count)) {
+			case i18n.One:
+				b.WriteString(msgs.arg(i18n.FormatNumber("en", float64(count))))
+				b.WriteString(" offline download finished")
+			default:
+				b.WriteString(msgs.arg(i18n.FormatNumber("en", float64(count))))
+				b.WriteString(" offline downloads finished")
+			}
+			return b.String()
+		case "zh-Hans":
+			var b strings.Builder
+			switch i18n.Cardinal("zh-Hans", float64(count)) {
+			default:
+				b.WriteString(i18n.FormatNumber("zh-Hans", float64(count)))
+				b.WriteString(" 个离线下载已完成")
+			}
+			return b.String()
+		}
+	}
+}
+
+// NotifyOfflineFailed says "{count, plural, one {# offline download failed} other {# offline downloads failed}}"
+// in the language the app shows under cx.
+func NotifyOfflineFailed(cx *core.Scope, count int) string { return For(cx).NotifyOfflineFailed(count) }
+
+// NotifyOfflineFailed is the package's NotifyOfflineFailed in the language of msgs.
+func (msgs Messages) NotifyOfflineFailed(count int) string {
+	if i18n.IsPseudo(msgs.lang) {
+		return i18n.Pseudo(msgs.lang, Messages{lang: Source, mark: true}.NotifyOfflineFailed(count))
+	}
+	for lang := msgs.lang; ; lang = i18n.Parent(lang) {
+		if f := supplied[lang].NotifyOfflineFailed; f != nil {
+			return f(count)
+		}
+		switch lang {
+		case "", "en":
+			var b strings.Builder
+			switch i18n.Cardinal("en", float64(count)) {
+			case i18n.One:
+				b.WriteString(msgs.arg(i18n.FormatNumber("en", float64(count))))
+				b.WriteString(" offline download failed")
+			default:
+				b.WriteString(msgs.arg(i18n.FormatNumber("en", float64(count))))
+				b.WriteString(" offline downloads failed")
+			}
+			return b.String()
+		case "zh-Hans":
+			var b strings.Builder
+			switch i18n.Cardinal("zh-Hans", float64(count)) {
+			default:
+				b.WriteString(i18n.FormatNumber("zh-Hans", float64(count)))
+				b.WriteString(" 个离线下载失败")
+			}
+			return b.String()
+		}
+	}
+}
+
+// NotifyOpenTransfers says "Tap to open Transfers"
+// in the language the app shows under cx.
+func NotifyOpenTransfers(cx *core.Scope) string { return For(cx).NotifyOpenTransfers() }
+
+// NotifyOpenTransfers is the package's NotifyOpenTransfers in the language of msgs.
+func (msgs Messages) NotifyOpenTransfers() string { return msgs.text(textNotifyOpenTransfers) }
 
 // SiteLatency says "{latency}"
 // in the language the app shows under cx.
@@ -4651,6 +5059,31 @@ func AccessKeychainDesc(cx *core.Scope) string { return For(cx).AccessKeychainDe
 // AccessKeychainDesc is the package's AccessKeychainDesc in the language of msgs.
 func (msgs Messages) AccessKeychainDesc() string { return msgs.text(textAccessKeychainDesc) }
 
+// AccessNotificationsTitle says "Allow notifications"
+// in the language the app shows under cx.
+func AccessNotificationsTitle(cx *core.Scope) string { return For(cx).AccessNotificationsTitle() }
+
+// AccessNotificationsTitle is the package's AccessNotificationsTitle in the language of msgs.
+func (msgs Messages) AccessNotificationsTitle() string {
+	return msgs.text(textAccessNotificationsTitle)
+}
+
+// AccessNotificationsDesc says "OpenList can notify you when uploads, downloads or offline tasks finish or fail. Allow notifications so you do not have to keep watching the Transfers tab. iOS and Android usually ask only once; if you refuse, turn them on later in System Settings."
+// in the language the app shows under cx.
+func AccessNotificationsDesc(cx *core.Scope) string { return For(cx).AccessNotificationsDesc() }
+
+// AccessNotificationsDesc is the package's AccessNotificationsDesc in the language of msgs.
+func (msgs Messages) AccessNotificationsDesc() string { return msgs.text(textAccessNotificationsDesc) }
+
+// AccessAllowNotifications says "Allow notifications"
+// in the language the app shows under cx.
+func AccessAllowNotifications(cx *core.Scope) string { return For(cx).AccessAllowNotifications() }
+
+// AccessAllowNotifications is the package's AccessAllowNotifications in the language of msgs.
+func (msgs Messages) AccessAllowNotifications() string {
+	return msgs.text(textAccessAllowNotifications)
+}
+
 // AccessBrowserTitle says "The browser blocked saving files"
 // in the language the app shows under cx.
 func AccessBrowserTitle(cx *core.Scope) string { return For(cx).AccessBrowserTitle() }
@@ -4760,6 +5193,13 @@ func ToastAccessOk(cx *core.Scope) string { return For(cx).ToastAccessOk() }
 
 // ToastAccessOk is the package's ToastAccessOk in the language of msgs.
 func (msgs Messages) ToastAccessOk() string { return msgs.text(textToastAccessOk) }
+
+// ToastNotifyReady says "Notifications are ready"
+// in the language the app shows under cx.
+func ToastNotifyReady(cx *core.Scope) string { return For(cx).ToastNotifyReady() }
+
+// ToastNotifyReady is the package's ToastNotifyReady in the language of msgs.
+func (msgs Messages) ToastNotifyReady() string { return msgs.text(textToastNotifyReady) }
 
 // ToastNoFolderPicker says "This browser can't choose a folder to save in. Try Chrome or Edge."
 // in the language the app shows under cx.

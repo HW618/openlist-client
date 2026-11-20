@@ -192,4 +192,13 @@ func (a *App) syncTasks() {
 	}
 	a.lastDone = doneUploads
 	a.raise(told)
+	if !first {
+		a.notifyTaskOutcomes(snap)
+	} else {
+		// Seed statuses without notifying for tasks restored from the last run.
+		for _, t := range snap {
+			a.taskStatus[t.ID] = t.Status
+		}
+		a.updateBadgeAndProgress(snap)
+	}
 }

@@ -33,13 +33,13 @@ type offlineState struct {
 // selectTab shows a tab, and starts reading offline tasks on the Transfers one.
 func (a *App) selectTab(i int) {
 	a.tab.Set(i)
-	if i == tabTransfers {
+	if i == tabTransfers || a.prefs.GetUntracked().NotifyMaster() {
 		a.pollOffline()
 	}
 }
 
 // pollOffline reads the tasks now and again every few seconds while the
-// Transfers tab is shown.
+// Transfers tab is shown, or while notifications are on so completions notify.
 func (a *App) pollOffline() {
 	a.refreshOffline()
 	if a.polling {
@@ -48,7 +48,9 @@ func (a *App) pollOffline() {
 	a.polling = true
 	var tick func()
 	tick = func() {
-		if a.tab.GetUntracked() != tabTransfers {
+		onTransfers := a.tab.GetUntracked() == tabTransfers
+		wantNotify := a.prefs.GetUntracked().NotifyMaster()
+		if !onTransfers && !wantNotify {
 			a.polling = false
 			return
 		}
@@ -87,6 +89,9 @@ func (a *App) refreshOffline() {
 				}
 			}
 			a.offline.Set(st)
+			if st.Loaded && !st.Admin {
+				a.notifyOfflineOutcomes(st.Tasks)
+			}
 		})
 }
 

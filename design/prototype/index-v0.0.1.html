@@ -17,6 +17,7 @@
     ?platform=desktop|web|android   切换“本机默认下载位置”的平台变体
     ?perm=folder,network,server,browser,keychain,notifications  启动即弹出对应的权限对话框
     ?notify=1                       演示一条合并后的任务完成通知（可点击跳到传输）
+    （默认）首次启动引导开启通知权限：弹出「允许通知」对话框，点「允许通知」再请求系统权限
 
   布局沿用 OD-LAYOUT-PRIMITIVES v1，样式沿用 Apple Design System 令牌与平台中性手机外壳。
 -->
@@ -1958,11 +1959,12 @@
         offlineDraft: { url: '', tool: 'aria2' },
         dirPickerMode: null,
         dirPickerBrowsePathIds: ['root'],
-        // 通知偏好（ROADMAP §1）：总开关、成功/失败分别开关；首次需要时才请求系统权限
+        // 通知偏好（ROADMAP §1）：总开关、成功/失败默认开；首次启动引导开启权限
         notifyMaster: true,
         notifySuccess: true,
         notifyFailure: true,
         notifyPermission: 'not-asked', // 'not-asked' | 'granted' | 'denied'
+        notifyAsked: false,
 
         sites: [
           {
@@ -3232,9 +3234,15 @@
             title = '无法安全保存登录信息';
             desc = '没有找到系统的密钥服务（Secret Service）。请安装并启动 GNOME Keyring 或 KWallet（例如 sudo apt install gnome-keyring），登录桌面后点“重新检查”。在此之前，登录信息只保存到本次运行结束，不会写入磁盘。';
           } else if (is.kind === 'notifications') {
-            title = '无法发送通知';
-            desc = '系统未允许本应用显示通知。请在系统设置中开启通知权限后重试；iOS 与安卓通常只会询问一次。';
-            actions = act('settings', 'settings', '打开系统设置');
+            if (is.detail === 'guide') {
+              title = '允许通知';
+              desc = '上传、下载或离线任务完成或失败时，OpenList 可以发出系统通知，这样就不必一直盯着「传输」页。请允许通知；iOS 与安卓通常只会询问一次。';
+              actions = act('notify-allow', 'shieldCheck', '允许通知');
+            } else {
+              title = '无法发送通知';
+              desc = '系统未允许本应用显示通知。请在系统设置中开启通知权限后重试；iOS 与安卓通常只会询问一次。';
+              actions = act('settings', 'settings', '打开系统设置');
+            }
           } else {
             title = '浏览器阻止了保存文件';
             desc = `浏览器不允许本页面写入你的设备（${is.detail}）。请重新授权该文件夹，或改用浏览器自带的下载。`;
@@ -4021,6 +4029,12 @@
           else if (k === 'settings') showToast('无法从这里打开系统设置，请手动打开并允许本应用。');
           else if (k === 'signin') openSignInSheet();
           else if (k === 'allow') { closeSheet(); showToast('已授权访问该文件夹'); }
+          else if (k === 'notify-allow') {
+            closeSheet();
+            state.notifyPermission = 'granted';
+            state.notifyAsked = true;
+            showToast('通知已就绪');
+          }
           else if (k === 'browser') { state.webFolderName = ''; closeSheet(); renderSettings(); showToast('已改用浏览器自带下载'); }
           return;
         }
@@ -4435,6 +4449,11 @@
       }
       if (bootParams.get('notify') === '1') {
         setTimeout(() => showSysNotify('3 个文件已下载', '点击查看传输记录', 'transfer:done'), 400);
+      }
+      // 首次启动：引导开启通知（不必等到第一个任务完成）。?perm= 已含 notifications 时不重复弹出。
+      if (!state.notifyAsked && !permParam) {
+        state.notifyAsked = true;
+        setTimeout(() => openPermissionSheet([{ kind: 'notifications', detail: 'guide', target: '' }]), 500);
       }
     })();
   </script>

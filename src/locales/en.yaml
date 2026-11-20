@@ -233,8 +233,24 @@ removeTask: Remove
 settingsTitle: Sites and settings
 groupSites: Saved OpenList sites
 groupAppearance: Appearance and browsing
+groupNotifications: Notifications
 groupPaths: Folders and downloads
 groupAbout: Storage and about
+notifyMaster: Task completion notifications
+notifyMasterDesc: System alerts when uploads, downloads or offline tasks finish or fail
+notifySuccess: Notify on success
+notifySuccessDesc: Alert when a task completes; several are merged into one
+notifyFailure: Notify on failure
+notifyFailureDesc: Alert when a task fails
+notifyLimitsTitle: Platform limits
+notifyLimitsDesc: If the system kills the app, transfers stop and there is no notification. Offline downloads finished on the server while the app is not running also produce none. Linux and the web only show notifications from this run. On Windows, tapping a notification needs an installed build.
+notifyDownloadDone: "{count, plural, one {# file downloaded} other {# files downloaded}}"
+notifyUploadDone: "{count, plural, one {# file uploaded} other {# files uploaded}}"
+notifyTransferBoth: "{count, plural, one {# transfer finished} other {# transfers finished}}"
+notifyTransferFailed: "{count, plural, one {# transfer failed} other {# transfers failed}}"
+notifyOfflineDone: "{count, plural, one {# offline download finished} other {# offline downloads finished}}"
+notifyOfflineFailed: "{count, plural, one {# offline download failed} other {# offline downloads failed}}"
+notifyOpenTransfers: Tap to open Transfers
 siteLatency: "{latency}"
 siteLatencyLine: "{url} · latency {latency}"
 siteTimeout: timed out
@@ -318,6 +334,9 @@ accessServerTitle: This account is not allowed
 accessServerDesc: "The server refused the request ({detail}). Sign in again, or ask the administrator to give this account the right."
 accessKeychainTitle: Can't keep your sign-in safely
 accessKeychainDesc: This system has no Secret Service to keep it in. Install and start GNOME Keyring or KWallet (for example sudo apt install gnome-keyring), sign in to your desktop and choose Check again. Until then your sign-in is kept only until the app closes, and is never written to disk.
+accessNotificationsTitle: Allow notifications
+accessNotificationsDesc: OpenList can notify you when uploads, downloads or offline tasks finish or fail. Allow notifications so you do not have to keep watching the Transfers tab. iOS and Android usually ask only once; if you refuse, turn them on later in System Settings.
+accessAllowNotifications: Allow notifications
 accessBrowserTitle: The browser blocked saving files
 accessBrowserDesc: "The browser did not let this page write to your device ({detail}). Allow access to the folder again, or use the browser's own download."
 accessOpenSettings: Open System Settings
@@ -331,6 +350,7 @@ toastSettingsManual: Couldn't open System Settings from here. Open it yourself a
 toastFolderAllowed: Access to the folder is allowed
 toastBrowserDownloadOn: Downloads now use the browser's own download
 toastAccessOk: All permissions are in place
+toastNotifyReady: Notifications are ready
 toastNoFolderPicker: This browser can't choose a folder to save in. Try Chrome or Edge.
 localDirNone: Not set · downloads use the browser's own download
 siteRoleAdmin: Admin
