@@ -8,7 +8,7 @@ A lightweight, cross-platform client for [OpenList](https://github.com/OpenListT
 
 ## Features
 
-Several servers (each with its own folders and download settings), browsing with breadcrumbs, sorting, list and grid views, search below the folder or through the whole server, selection with batch move and delete, a floating menu for new folders and files, upload and download queues, offline downloads with their progress, system notifications when transfers or offline tasks finish or fail (with Settings toggles; the app asks for permission on first launch), file preview, and permission checks with guidance.
+Several servers (each with its own folders and download settings), browsing with breadcrumbs, sorting, list and grid views, search below the folder or through the whole server, selection with batch move and delete, a floating menu for new folders and files, upload and download queues, offline downloads with their progress, system notifications when transfers or offline tasks finish or fail (with a Settings toggle, collapsing many alerts into a summary; the app asks for permission on first launch), file preview, and permission checks with guidance.
 
 ## Signing in and where logins are kept
 

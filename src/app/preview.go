@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net/http"
 
@@ -38,6 +39,9 @@ func fetchPreview(ctx context.Context, r previewReq) (previewData, error) {
 	if obj.Size > maxTextPreview {
 		d.Large = true
 		return d, nil
+	}
+	if obj.RawURL == "" {
+		return d, errors.New("preview: server returned no valid URL")
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, obj.RawURL, nil)
 	if err != nil {

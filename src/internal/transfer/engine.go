@@ -174,7 +174,10 @@ func (e *Engine) Retry(id string) { e.requeue(id, Failed) }
 func (e *Engine) requeue(id string, from Status) {
 	e.mu.Lock()
 	if en := e.find(id); en != nil && en.task.Status == from && !en.running {
-		en.task.Status, en.task.Err = Active, ""
+		en.task.Status, en.task.Err, en.task.Speed = Active, "", 0
+		if en.task.Direction == Upload {
+			en.task.Done = 0
+		}
 		e.startLocked()
 	}
 	e.mu.Unlock()
@@ -215,6 +218,7 @@ func (e *Engine) ClearDone() int {
 		}
 		kept = append(kept, en)
 	}
+	clear(e.entries[len(kept):])
 	e.entries = kept
 	e.mu.Unlock()
 	e.changed(true)
@@ -269,13 +273,13 @@ func (e *Engine) work(ctx context.Context, en *entry, t Task, run RunFunc) {
 	e.running--
 	if !en.removed {
 		switch {
-		case en.pausing:
-			en.task.Status = Paused
 		case err == nil:
 			en.task.Status, en.task.Speed = Done, 0
 			if en.task.Total > 0 {
 				en.task.Done = en.task.Total
 			}
+		case en.pausing:
+			en.task.Status = Paused
 		default:
 			en.task.Status, en.task.Speed, en.task.Err = Failed, 0, err.Error()
 		}
@@ -299,7 +303,9 @@ func (e *Engine) report(en *entry, done, total int64) {
 		en.task.Total = total
 	}
 	now := time.Now()
-	if dt := now.Sub(en.sampled); dt >= 300*time.Millisecond {
+	if done < en.sample {
+		en.sampled, en.sample, en.task.Speed = now, done, 0
+	} else if dt := now.Sub(en.sampled); dt >= 300*time.Millisecond {
 		inst := float64(done-en.sample) / dt.Seconds()
 		if en.task.Speed == 0 {
 			en.task.Speed = inst

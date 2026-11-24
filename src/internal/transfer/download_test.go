@@ -118,7 +118,17 @@ func TestFetchFailsOnHTTPError(t *testing.T) {
 }
 
 func TestSafeName(t *testing.T) {
-	for in, want := range map[string]string{"a/b:c": "a_b_c", "  ": "download", "..": "download", "ok.txt": "ok.txt"} {
+	for in, want := range map[string]string{
+		"a/b:c":       "a_b_c",
+		"  ":          "download",
+		"..":          "download",
+		"ok.txt":      "ok.txt",
+		"a\x00b\nc":   "a_b_c",
+		"file. ":      "file",
+		"CON":         "_CON",
+		"con.txt":     "_con.txt",
+		"LPT1.tar.gz": "_LPT1.tar.gz",
+	} {
 		if got := SafeName(in); got != want {
 			t.Errorf("SafeName(%q) = %q, want %q", in, got, want)
 		}
@@ -194,5 +204,92 @@ func TestFetchToAndBytesTakeNoClientAndNoProgressCallback(t *testing.T) {
 	got, err := FetchBytes(context.Background(), srv.Client(), srv.URL, nil, 0, nil)
 	if err != nil || string(got) != body {
 		t.Fatalf("FetchBytes: %q, %v", got, err)
+	}
+}
+
+func TestFetchWithPartIsolatesConcurrentSameNameFiles(t *testing.T) {
+	p1Body := strings.Repeat("A", 1024)
+	p2Body := strings.Repeat("B", 1024)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/1":
+			_, _ = io.WriteString(w, p1Body)
+		case "/2":
+			_, _ = io.WriteString(w, p2Body)
+		}
+	}))
+	defer srv.Close()
+	dir := t.TempDir()
+	errCh := make(chan error, 2)
+	pathCh := make(chan string, 2)
+	for _, tc := range []struct {
+		urlPath, id string
+	}{{"/1", "tr-1"}, {"/2", "tr-2"}} {
+		go func(u, id string) {
+			p, err := FetchWithPart(context.Background(), srv.Client(), srv.URL+u, nil, dir, "same.bin", id, nil)
+			errCh <- err
+			pathCh <- p
+		}(tc.urlPath, tc.id)
+	}
+	for i := 0; i < 2; i++ {
+		if err := <-errCh; err != nil {
+			t.Fatal(err)
+		}
+	}
+	got1, _ := os.ReadFile(<-pathCh)
+	got2, _ := os.ReadFile(<-pathCh)
+	s1, s2 := string(got1), string(got2)
+	if !((s1 == p1Body && s2 == p2Body) || (s1 == p2Body && s2 == p1Body)) {
+		t.Fatalf("concurrent same-name files corrupted: len1=%d len2=%d", len(s1), len(s2))
+	}
+}
+
+func TestFetch416WithShrunkRemoteRestartsCleanly(t *testing.T) {
+	const remote = "short"
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Range") != "" {
+			w.Header().Set("Content-Range", "bytes */5")
+			w.WriteHeader(http.StatusRequestedRangeNotSatisfiable)
+			return
+		}
+		w.Header().Set("Content-Length", strconv.Itoa(len(remote)))
+		_, _ = io.WriteString(w, remote)
+	}))
+	defer srv.Close()
+	dir := t.TempDir()
+	// Oversized stale .part (larger than remote's 5 bytes) must not be accepted as complete.
+	_ = os.WriteFile(filepath.Join(dir, "tr-1.part"), []byte("oversized-stale-part"), 0o644)
+	p, err := FetchWithPart(context.Background(), srv.Client(), srv.URL, nil, dir, "a.txt", "tr-1", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, _ := os.ReadFile(p)
+	if string(got) != remote {
+		t.Fatalf("got %q, want %q", got, remote)
+	}
+}
+
+func TestFetchRestartsOnContentRangeStartMismatch(t *testing.T) {
+	const remote = "fresh-content"
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Range") != "" {
+			w.Header().Set("Content-Range", "bytes 0-5/13")
+			w.WriteHeader(http.StatusPartialContent)
+			_, _ = io.WriteString(w, "fresh-")
+			return
+		}
+		w.Header().Set("Content-Length", strconv.Itoa(len(remote)))
+		_, _ = io.WriteString(w, remote)
+	}))
+	defer srv.Close()
+	dir := t.TempDir()
+	_ = os.WriteFile(filepath.Join(dir, "tr-2.part"), []byte("1234"), 0o644)
+	p, err := FetchWithPart(context.Background(), srv.Client(), srv.URL, nil, dir, "b.txt", "tr-2", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, _ := os.ReadFile(p)
+	if string(got) != remote {
+		t.Fatalf("got %q, want %q", got, remote)
 	}
 }

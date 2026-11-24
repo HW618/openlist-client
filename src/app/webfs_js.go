@@ -3,6 +3,7 @@
 package app
 
 import (
+	"context"
 	"errors"
 	"io"
 	"strconv"
@@ -77,14 +78,23 @@ func then(p js.Value, ok func(js.Value), fail func(error)) {
 // await waits for a promise, from a goroutine of the app's own: not from a
 // callback of the script, which it would stop.
 func await(p js.Value) (js.Value, error) {
+	return awaitCtx(context.Background(), p)
+}
+
+// awaitCtx waits for a promise or returns ctx.Err() if ctx is cancelled first.
+func awaitCtx(ctx context.Context, p js.Value) (js.Value, error) {
 	type result struct {
 		v   js.Value
 		err error
 	}
 	ch := make(chan result, 1)
 	then(p, func(v js.Value) { ch <- result{v: v} }, func(err error) { ch <- result{err: err} })
-	r := <-ch
-	return r.v, r.err
+	select {
+	case r := <-ch:
+		return r.v, r.err
+	case <-ctx.Done():
+		return js.Undefined(), ctx.Err()
+	}
 }
 
 // ---- IndexedDB, for the handles ----
@@ -132,12 +142,17 @@ func saveHandle(siteID string, h js.Value) {
 		if err != nil {
 			return
 		}
-		store := db.Call("transaction", "kv", "readwrite").Call("objectStore", "kv")
+		tx := db.Call("transaction", "kv", "readwrite")
+		store := tx.Call("objectStore", "kv")
+		var req js.Value
 		if h.IsUndefined() {
-			store.Call("delete", siteID)
+			req = store.Call("delete", siteID)
 		} else {
-			store.Call("put", h, siteID)
+			req = store.Call("put", h, siteID)
 		}
+		request(req, func(js.Value, error) {
+			db.Call("close")
+		})
 	})
 }
 
@@ -170,6 +185,7 @@ func webFolderLoad(siteID string, done func(name string)) {
 		}
 		req := db.Call("transaction", "kv", "readonly").Call("objectStore", "kv").Call("get", siteID)
 		request(req, func(v js.Value, err error) {
+			db.Call("close")
 			if err != nil || v.Type() != js.TypeObject {
 				done("")
 				return
@@ -234,9 +250,12 @@ func webFolderAllow(siteID string, done func(granted bool, err error)) {
 		func(err error) { done(false, err) })
 }
 
+var createMu sync.Mutex
+
 // webFile is a file being written in a chosen folder, which appears whole
 // when it is closed.
 type webFile struct {
+	ctx    context.Context
 	w      js.Value
 	dir    js.Value
 	Name   string
@@ -246,21 +265,26 @@ type webFile struct {
 // webFolderCreate makes a file in the folder of a site, under a name that
 // is free there. It waits on the browser, so it runs off the script's own
 // callbacks.
-func webFolderCreate(siteID, name string) (*webFile, error) {
+func webFolderCreate(ctx context.Context, siteID, name string) (*webFile, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	h, ok := folderOf(siteID)
 	if !ok {
 		return nil, errors.New("no folder is chosen")
 	}
-	state, err := await(h.Call("queryPermission", map[string]any{"mode": "readwrite"}))
+	state, err := awaitCtx(ctx, h.Call("queryPermission", map[string]any{"mode": "readwrite"}))
 	if err != nil {
 		return nil, err
 	}
 	if state.String() != "granted" {
 		return nil, &jsErr{name: "NotAllowedError", msg: "the page has no write access to the folder, which the browser asks for again"}
 	}
+	createMu.Lock()
+	defer createMu.Unlock()
 	final := name
 	for i := 1; ; i++ {
-		_, err := await(h.Call("getFileHandle", final))
+		_, err := awaitCtx(ctx, h.Call("getFileHandle", final))
 		if err != nil {
 			if errName(err) == "NotFoundError" {
 				break
@@ -272,15 +296,15 @@ func webFolderCreate(siteID, name string) (*webFile, error) {
 		}
 		final = numbered(name, i)
 	}
-	fh, err := await(h.Call("getFileHandle", final, map[string]any{"create": true}))
+	fh, err := awaitCtx(ctx, h.Call("getFileHandle", final, map[string]any{"create": true}))
 	if err != nil {
 		return nil, err
 	}
-	w, err := await(fh.Call("createWritable"))
+	w, err := awaitCtx(ctx, fh.Call("createWritable"))
 	if err != nil {
 		return nil, err
 	}
-	return &webFile{w: w, dir: h, Name: final}, nil
+	return &webFile{ctx: ctx, w: w, dir: h, Name: final}, nil
 }
 
 // numbered puts " (n)" before the extension of a name.
@@ -295,7 +319,7 @@ func numbered(name string, n int) string {
 func (f *webFile) Write(p []byte) (int, error) {
 	buf := js.Global().Get("Uint8Array").New(len(p))
 	js.CopyBytesToJS(buf, p)
-	if _, err := await(f.w.Call("write", buf)); err != nil {
+	if _, err := awaitCtx(f.ctx, f.w.Call("write", buf)); err != nil {
 		return 0, err
 	}
 	return len(p), nil
@@ -304,7 +328,7 @@ func (f *webFile) Write(p []byte) (int, error) {
 // Close makes the file appear in the folder.
 func (f *webFile) Close() error {
 	f.closed = true
-	_, err := await(f.w.Call("close"))
+	_, err := awaitCtx(f.ctx, f.w.Call("close"))
 	return err
 }
 

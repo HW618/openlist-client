@@ -93,3 +93,6 @@ local.properties
 Pods/
 xcuserdata/
 DerivedData/
+
+# Local OpenList Docker test environment data
+/data/

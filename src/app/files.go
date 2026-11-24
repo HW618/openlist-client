@@ -3,6 +3,7 @@ package app
 import (
 	"hash/fnv"
 	"path"
+	"strconv"
 	"strings"
 	"time"
 
@@ -108,13 +109,23 @@ func (a *App) siteHeader(cx *core.Scope) core.Node {
 // selectionBar replaces the header while files are being chosen.
 func (a *App) selectionBar(cx *core.Scope) core.Node {
 	allSelected := func() bool {
-		n := len(a.items.Get())
-		return n > 0 && len(a.selected.Get()) >= n
+		items := a.items.Get()
+		if len(items) == 0 {
+			return false
+		}
+		sel := a.selected.Get()
+		for _, it := range items {
+			if !sel[it.Path] {
+				return false
+			}
+		}
+		return true
 	}
+	selectedCount := func() int { return len(a.selectedItems()) }
 	return header(cx,
 		ui.Button{Text: locales.SelectDone(cx), Variant: ui.ButtonSecondary, OnPress: a.endSelect, TestID: "select-done"},
 		core.View{Style: fillStyle, Children: []core.Node{
-			txtf(cx, func() string { return locales.SelectedCount(cx, len(a.selected.Get())) },
+			txtf(cx, func() string { return locales.SelectedCount(cx, selectedCount()) },
 				theme.TypeBody.Merge(core.Style{TextAlign: core.TextAlignCenter}), cText)}},
 		textButton(cx, func() string {
 			if allSelected() {
@@ -143,7 +154,7 @@ func (a *App) searchRow(cx *core.Scope) core.Node {
 	clear := core.Show{When: func() bool { return a.query.Get() != "" }, Then: func(cx *core.Scope) core.Node {
 		return iconButton(lucide.X, locales.ClearSearchLabel(cx), func() {
 			a.query.Set("")
-			a.globalText.Set("")
+			a.commitGlobal()
 		})
 	}}
 	scope := core.View{Role: core.RoleTab, Label: locales.ScopeLabel(cx), Style: core.Style{Direction: core.Row, Gap: 8}, Children: []core.Node{
@@ -367,7 +378,13 @@ func (a *App) errorView(cx *core.Scope) core.Node {
 // itemKey names an item together with what is shown of it, so a row is built
 // again when the item changes.
 func itemKey(it browse.Item) string {
-	return it.Path + "|" + itoa(int(it.Size)) + "|" + itoa(int(it.Modified.Unix()))
+	dir := "0"
+	if it.IsDir {
+		dir = "1"
+	}
+	return it.Path + "|" + dir + "|" + strconv.Itoa(int(it.Kind)) + "|" +
+		strconv.FormatInt(it.Size, 10) + "|" + strconv.FormatInt(it.Modified.Unix(), 10) + "|" +
+		it.Thumb + "|" + it.Sign
 }
 
 // fileList is the files as rows, built as they come into view. The list is
@@ -564,7 +581,7 @@ func (a *App) fileGrid(cx *core.Scope) core.Node {
 // batchBar is the actions on the chosen files, along the bottom.
 func (a *App) batchBar(cx *core.Scope) core.Node {
 	th := theme.Of(cx)
-	none := func() bool { return len(a.selected.Get()) == 0 }
+	none := func() bool { return len(a.selectedItems()) == 0 }
 	action := func(id string, svg func() *core.SVG, label string, danger bool, run func([]browse.Item)) core.Node {
 		color := cText
 		if danger {
@@ -600,10 +617,23 @@ func (a *App) batchBar(cx *core.Scope) core.Node {
 
 // startMove asks for the folder to move the chosen files to.
 func (a *App) startMove(items []browse.Item) {
+	groups := byParent(items)
+	exclude := ""
+	if len(groups) == 1 {
+		for dir := range groups {
+			exclude = dir
+		}
+	}
+	var trees []string
+	for _, it := range items {
+		if it.IsDir && !browse.IsMount(it) {
+			trees = append(trees, it.Path)
+		}
+	}
 	a.openPicker(&pickerSpec{
 		Title: locales.MoveTitle(a.cx, len(items)), Start: a.path.GetUntracked(), ConfirmText: locales.MoveHere(a.cx),
-		Exclude: a.path.GetUntracked(),
-		Confirm: func(dir string) { a.move(items, dir) },
+		Exclude: exclude, ExcludeTrees: trees,
+		ConfirmWith: func(dir string, done func(error)) { a.move(items, dir, done) },
 	})
 }
 

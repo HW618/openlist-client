@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	"io"
 	"os"
 	"strings"
@@ -34,10 +35,26 @@ func (a *App) refresh(announce bool) {
 	}
 }
 
+func validEntryName(name string) bool {
+	name = strings.TrimSpace(name)
+	return name != "" && name != "." && name != ".." && !strings.ContainsAny(name, "/\\\x00")
+}
+
+func cleanUploadName(name string) string {
+	name = strings.TrimSpace(strings.NewReplacer("/", "_", "\\", "_", "\x00", "_").Replace(name))
+	if name == "" || name == "." || name == ".." {
+		return "upload"
+	}
+	return name
+}
+
 // changed runs after a call that changes files: it closes the panel, reads
 // the folder again and says what happened.
-func (a *App) changed(msg string) func(struct{}, error) {
+func (a *App) changed(msg string, done func(error)) func(struct{}, error) {
 	return func(_ struct{}, err error) {
+		if done != nil {
+			done(err)
+		}
 		if err != nil {
 			a.fail(err)
 			return
@@ -53,44 +70,80 @@ func (a *App) changed(msg string) func(struct{}, error) {
 	}
 }
 
-func (a *App) mkdir(name string) {
+func (a *App) mkdir(name string, done func(error)) {
 	c := a.client()
 	if c == nil {
+		if done != nil {
+			done(errors.New("no site selected"))
+		}
 		return
 	}
 	name = strings.TrimSpace(name)
+	if !validEntryName(name) {
+		err := errors.New(locales.FolderNameError(a.cx))
+		if done != nil {
+			done(err)
+		}
+		a.toast(locales.ToastError(a.cx, err.Error()))
+		return
+	}
 	full := openlist.Join(a.path.GetUntracked(), name)
 	goPost(a.cx, func(ctx context.Context) (struct{}, error) { return struct{}{}, c.Mkdir(ctx, full) },
-		a.changed(locales.ToastFolderCreated(a.cx, name)))
+		a.changed(locales.ToastFolderCreated(a.cx, name), done))
 }
 
 // newFile creates a text file with body.
-func (a *App) newFile(name, body string) {
+func (a *App) newFile(name, body string, done func(error)) {
 	c := a.client()
 	if c == nil {
+		if done != nil {
+			done(errors.New("no site selected"))
+		}
 		return
 	}
 	name = strings.TrimSpace(name)
+	if !validEntryName(name) {
+		err := errors.New(locales.FileNameError(a.cx))
+		if done != nil {
+			done(err)
+		}
+		a.toast(locales.ToastError(a.cx, err.Error()))
+		return
+	}
 	full := openlist.Join(a.path.GetUntracked(), name)
 	goPost(a.cx, func(ctx context.Context) (struct{}, error) {
 		return struct{}{}, c.Put(ctx, full, strings.NewReader(body), int64(len(body)))
-	}, a.changed(locales.ToastFileCreated(a.cx, name)))
+	}, a.changed(locales.ToastFileCreated(a.cx, name), done))
 }
 
-func (a *App) rename(it browse.Item, name string) {
+func (a *App) rename(it browse.Item, name string, done func(error)) {
 	c := a.client()
 	if c == nil {
+		if done != nil {
+			done(errors.New("no site selected"))
+		}
 		return
 	}
 	name = strings.TrimSpace(name)
+	if !validEntryName(name) {
+		err := errors.New(locales.RenameError(a.cx))
+		if done != nil {
+			done(err)
+		}
+		a.toast(locales.ToastError(a.cx, err.Error()))
+		return
+	}
 	goPost(a.cx, func(ctx context.Context) (struct{}, error) { return struct{}{}, c.Rename(ctx, it.Path, name) },
-		a.changed(locales.ToastRenamed(a.cx)))
+		a.changed(locales.ToastRenamed(a.cx), done))
 }
 
 // remove deletes items, skipping storage roots.
-func (a *App) remove(items []browse.Item) {
+func (a *App) remove(items []browse.Item, done func(error)) {
 	c := a.client()
 	if c == nil {
+		if done != nil {
+			done(errors.New("no site selected"))
+		}
 		return
 	}
 	var ok []browse.Item
@@ -100,47 +153,92 @@ func (a *App) remove(items []browse.Item) {
 		}
 	}
 	if len(ok) == 0 {
+		if done != nil {
+			done(nil)
+		}
 		a.closeSheet()
 		a.toast(locales.ToastMountNoDelete(a.cx))
 		return
 	}
 	groups := byParent(ok)
-	goPost(a.cx, func(ctx context.Context) (struct{}, error) {
+	type removeRes struct {
+		partial bool
+	}
+	goPost(a.cx, func(ctx context.Context) (removeRes, error) {
+		applied := false
 		for dir, names := range groups {
 			if err := c.Remove(ctx, dir, names); err != nil {
-				return struct{}{}, err
+				return removeRes{partial: applied}, err
 			}
+			applied = true
 		}
-		return struct{}{}, nil
-	}, a.changed(locales.ToastDeleted(a.cx, len(ok))))
+		return removeRes{}, nil
+	}, func(res removeRes, err error) {
+		if err != nil && res.partial {
+			a.listing.Refetch()
+		}
+		a.changed(locales.ToastDeleted(a.cx, len(ok)), done)(struct{}{}, err)
+	})
 }
 
-// move puts items into dst, skipping storage roots and what is there.
-func (a *App) move(items []browse.Item, dst string) {
+// move puts items into dst, skipping storage roots, items already in dst, and
+// folders that would move into themselves or their descendants.
+func (a *App) move(items []browse.Item, dst string, done func(error)) {
 	c := a.client()
 	if c == nil {
+		if done != nil {
+			done(errors.New("no site selected"))
+		}
 		return
 	}
+	dst = openlist.Clean(dst)
 	var ok []browse.Item
+	onlyMounts := len(items) > 0
 	for _, it := range items {
-		if !browse.IsMount(it) && openlist.Parent(it.Path) != dst {
-			ok = append(ok, it)
+		if !browse.IsMount(it) {
+			onlyMounts = false
 		}
+		if browse.IsMount(it) || openlist.Parent(it.Path) == dst {
+			continue
+		}
+		if it.IsDir && (dst == it.Path || strings.HasPrefix(dst, it.Path+"/")) {
+			continue
+		}
+		ok = append(ok, it)
 	}
 	if len(ok) == 0 {
+		if done != nil {
+			done(nil)
+		}
 		a.closeSheet()
-		a.toast(locales.ToastMountNoMove(a.cx))
+		if onlyMounts {
+			a.toast(locales.ToastMountNoMove(a.cx))
+		}
 		return
 	}
 	groups := byParent(ok)
-	goPost(a.cx, func(ctx context.Context) (struct{}, error) {
+	targetName := openlist.Base(dst)
+	if targetName == "" {
+		targetName = "/"
+	}
+	type moveRes struct {
+		partial bool
+	}
+	goPost(a.cx, func(ctx context.Context) (moveRes, error) {
+		applied := false
 		for dir, names := range groups {
 			if err := c.Move(ctx, dir, dst, names); err != nil {
-				return struct{}{}, err
+				return moveRes{partial: applied}, err
 			}
+			applied = true
 		}
-		return struct{}{}, nil
-	}, a.changed(locales.ToastMoved(a.cx, len(ok), openlist.Base(dst))))
+		return moveRes{}, nil
+	}, func(res moveRes, err error) {
+		if err != nil && res.partial {
+			a.listing.Refetch()
+		}
+		a.changed(locales.ToastMoved(a.cx, len(ok), targetName), done)(struct{}{}, err)
+	})
 }
 
 // copyLinks puts the direct links of the files among items on the clipboard.
@@ -219,8 +317,9 @@ func (a *App) pickAndUpload() {
 			a.uploadMu.Lock()
 			a.uploadFile[key] = f
 			a.uploadMu.Unlock()
-			a.engine.Add(transfer.Task{Name: f.Name, Direction: transfer.Upload, SiteID: s.ID, SiteName: s.Name,
-				RemotePath: openlist.Join(dest, f.Name), LocalPath: key, Total: f.Size})
+			name := cleanUploadName(f.Name)
+			a.engine.Add(transfer.Task{Name: name, Direction: transfer.Upload, SiteID: s.ID, SiteName: s.Name,
+				RemotePath: openlist.Join(dest, name), LocalPath: key, Total: f.Size})
 		}
 		a.closeSheet()
 		a.toast(locales.ToastUploadQueued(a.cx, len(files)))
@@ -290,6 +389,9 @@ func (a *App) openLocal(key string) (io.ReadCloser, int64, error) {
 		r, err := f.Open()
 		return r, f.Size, err
 	}
+	if strings.HasPrefix(key, "mem:") {
+		return nil, 0, errors.New("upload source is no longer available after restart")
+	}
 	file, err := os.Open(key)
 	if err != nil {
 		return nil, 0, err
@@ -336,17 +438,25 @@ func (a *App) testSite(s store.Site) {
 		a.status.Set(m)
 	}
 	set(siteStatus{Checking: true})
-	c := a.clientFor(s)
 	type result struct {
-		user openlist.User
-		took time.Duration
+		user  openlist.User
+		took  time.Duration
+		guest bool
 	}
 	goPost(a.cx, func(ctx context.Context) (result, error) {
+		if a.readyCh != nil {
+			select {
+			case <-a.readyCh:
+			case <-ctx.Done():
+				return result{}, ctx.Err()
+			}
+		}
+		c := a.clientFor(s)
 		ctx, cancel := context.WithTimeout(ctx, 8*time.Second)
 		defer cancel()
 		t0 := time.Now()
 		u, err := c.Me(ctx)
-		return result{u, time.Since(t0)}, err
+		return result{u, time.Since(t0), c.Token == ""}, err
 	}, func(r result, err error) {
 		st := siteStatus{Latency: r.took, User: r.user.Username, Role: r.user.Role}
 		name := s.Name
@@ -355,7 +465,7 @@ func (a *App) testSite(s store.Site) {
 		case err == nil && r.user.Disabled:
 			st.Auth = authDisabled
 			a.toast(locales.ToastSiteDisabled(a.cx, name, r.user.Username))
-		case err == nil && (r.user.Role == openlist.RoleGuest || c.Token == ""):
+		case err == nil && (r.user.Role == openlist.RoleGuest || r.guest):
 			st.Auth = authGuest
 			a.toast(locales.ToastSiteGuest(a.cx, name, lat))
 		case err == nil:
@@ -448,14 +558,25 @@ func (a *App) signOut(s store.Site) {
 func (a *App) signIn(user, pass string, done func(error)) {
 	s, ok := a.site()
 	if !ok {
+		if done != nil {
+			done(errors.New(locales.ToastNoSite(a.cx)))
+		}
 		return
 	}
 	c := &openlist.Client{BaseURL: s.URL, HTTP: apiHTTP}
 	user = strings.TrimSpace(user)
-	goPost(a.cx, func(ctx context.Context) (string, error) { return c.Login(ctx, user, pass) },
+	goPost(a.cx, func(ctx context.Context) (string, error) {
+		tok, err := c.Login(ctx, user, pass)
+		if err == nil && tok == "" {
+			return "", errors.New("server returned an empty token")
+		}
+		return tok, err
+	},
 		func(tok string, err error) {
 			if err != nil {
-				done(err)
+				if done != nil {
+					done(err)
+				}
 				return
 			}
 			_ = a.secrets.Set(s.ID, tok)
@@ -463,7 +584,12 @@ func (a *App) signIn(user, pass string, done func(error)) {
 			a.syncClients()
 			a.closeSheet()
 			a.listing.Refetch()
+			if a.tab.GetUntracked() == tabTransfers || a.prefs.GetUntracked().NotifyMaster() {
+				a.pollOffline()
+			}
 			a.toast(locales.ToastSignedIn(a.cx))
-			done(nil)
+			if done != nil {
+				done(nil)
+			}
 		})
 }

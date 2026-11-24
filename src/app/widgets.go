@@ -161,12 +161,6 @@ func buttons(kids ...core.Node) core.Node {
 	return core.View{Style: core.Style{Direction: core.Row, Gap: 8}, Children: kids}
 }
 
-// dangerButton is a button in the color of destructive actions.
-func dangerButton(cx *core.Scope, text string, onPress func()) core.Node {
-	th := theme.Of(cx)
-	return ui.Button{Text: text, OnPress: onPress, Flex: 1, Color: th.Danger}
-}
-
 // page frames a tab's content: the room left, with the content kept to a
 // readable width and centered on a wide window.
 func page(cx *core.Scope, kids ...core.Node) core.Node {
@@ -230,29 +224,100 @@ func (a *App) sheetFrame(title string, body []core.Node, footer []core.Node) cor
 	wide := false
 	cx.Untrack(func() { wide = cx.Env().Window().Width >= theme.DialogBreakpoint })
 	open := func() bool { return true }
-	// The body scrolls inside the room the window leaves it, however long.
-	var maxH core.Points
-	cx.Untrack(func() { maxH = cx.Env().Window().Height * 0.6 })
-	body = []core.Node{ui.ScrollView{Style: core.Style{MaxHeight: core.Pt(maxH)}, ContentStyle: core.Style{Gap: 14}, Children: body}}
-	pad := core.View{Style: core.Style{PaddingEnv: core.EnvEdges{Bottom: core.EnvKeyboard}}, Children: body}
+	// The body scrolls inside the room the window and software keyboard leave it.
+	scrollMax := func() core.Points {
+		env := cx.Env()
+		win := env.Window()
+		maxH := win.Height * 0.6
+		if !wide {
+			safe := env.SafeArea()
+			bottom := max(env.KeyboardHeight(), safe.Bottom)
+			if room := win.Height - safe.Top - bottom - 156; room < maxH {
+				maxH = max(room, 96)
+			}
+		}
+		return maxH
+	}
+	scrollRef := new(core.Ref)
+	contentH := core.NewSignal(cx, core.Points(0))
+	if !wide {
+		// On iOS, keepFocusedClear can scroll the sheet body while the keyboard
+		// begins to open, before EnvKeyboard lifts the sheet; return to the top
+		// once the content fits in the room above the keyboard.
+		cx.Effect(func() {
+			kb := cx.Env().KeyboardHeight()
+			ch := contentH.Get()
+			mh := scrollMax()
+			if kb > 0 && ch > 0 && ch <= mh {
+				scrollRef.ScrollTo(core.Point{}, false)
+			}
+		})
+	}
+	scroll := core.Scroll{
+		Ref:       scrollRef,
+		Style:     core.Style{FlexShrink: 1, MinHeight: core.Pt(0), MinWidth: core.Pt(0)},
+		StyleFunc: func() core.Style { return core.Style{MaxHeight: core.Pt(scrollMax())} },
+		BehaviorFunc: func() core.ScrollBehavior {
+			ch := contentH.Get()
+			return core.ScrollBehavior{
+				KeyboardDismissMode:       core.KeyboardDismissInteractive,
+				KeyboardShouldPersistTaps: core.KeyboardTapsHandled,
+				NoScroll:                  ch > 0 && ch <= scrollMax(),
+			}
+		},
+		OnScroll: func(e core.ScrollEvent) {
+			if wide || e.Stale || e.Offset.Y == 0 {
+				return
+			}
+			ch := contentH.GetUntracked()
+			var mh core.Points
+			cx.Untrack(func() { mh = scrollMax() })
+			if ch > 0 && ch <= mh {
+				scrollRef.ScrollTo(core.Point{}, false)
+			}
+		},
+		Children: []core.Node{core.View{
+			Style:    core.Style{Gap: 14},
+			OnLayout: func(b core.Bounds) { contentH.Set(b.Size.Height) },
+			Children: body,
+		}},
+	}
 	if wide {
-		kids := []core.Node{pad}
+		pad := core.View{Style: core.Style{PaddingEnv: core.EnvEdges{Bottom: core.EnvKeyboard}}, Children: []core.Node{scroll}}
 		return ui.Dialog{Open: open, Title: title, OnClose: a.closeSheet,
 			OnOpenChange: func(o bool, _ base.Reason) {
 				if !o {
 					a.closeSheet()
 				}
 			},
-			Children: kids, Footer: footer, Style: core.Style{MaxWidth: core.Pt(480), Width: core.Pct(90)}}
+			Children: []core.Node{pad}, Footer: footer, Style: core.Style{MaxWidth: core.Pt(480), Width: core.Pct(90)}}
 	}
-	head := row(8,
-		core.View{Style: fillStyle, Children: []core.Node{txt(cx, title, theme.TypeSheet, cText)}},
-		iconButton(lucide.X, locales.CloseSheetLabel(cx), a.closeSheet))
-	kids := []core.Node{head, pad}
+	dismiss := func(core.PressEvent) { cx.DismissKeyboard() }
+	head := core.View{
+		OnPress: dismiss, NoFocus: true, ImportantForAccessibility: core.ImportantNo,
+		Style: core.Style{Direction: core.Row, AlignItems: core.AlignCenter, Gap: 8},
+		Children: []core.Node{
+			core.View{Style: fillStyle, Children: []core.Node{txt(cx, title, theme.TypeSheet, cText)}},
+			iconButton(lucide.X, locales.CloseSheetLabel(cx), a.closeSheet),
+		},
+	}
+	kids := []core.Node{head, scroll}
 	if len(footer) > 0 {
 		kids = append(kids, buttons(footer...))
 	}
-	return ui.Sheet{Open: open, OnClose: a.closeSheet, Children: kids}
+	wrap := core.View{
+		OnPress: dismiss, NoFocus: true, ImportantForAccessibility: core.ImportantNo,
+		Style:   core.Style{Gap: 12},
+		StyleFunc: func() core.Style {
+			safeBottom := cx.Env().SafeArea().Bottom
+			return core.Style{
+				Padding:    core.Edges{Bottom: -safeBottom},
+				PaddingEnv: core.EnvEdges{Bottom: core.EnvKeyboard},
+			}
+		},
+		Children: kids,
+	}
+	return ui.Sheet{Open: open, OnClose: a.closeSheet, Children: []core.Node{wrap}}
 }
 
 // textButton is words in the accent color that press, with no box around.

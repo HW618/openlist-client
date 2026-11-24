@@ -105,6 +105,9 @@ type NotifyPrefs struct {
 	// Asked is whether the app has already guided the user to grant
 	// notification permission (first launch or Settings).
 	Asked bool `json:"asked,omitempty"`
+	// Requested is whether the app has actually invoked the platform's
+	// notification permission prompt.
+	Requested bool `json:"requested,omitempty"`
 }
 
 // DefaultPrefs are the preferences of a first run.

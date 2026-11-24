@@ -63,8 +63,12 @@ type pickerSpec struct {
 	ConfirmText string
 	// Exclude is a folder that cannot be chosen, where a move starts.
 	Exclude string
+	// ExcludeTrees are folder paths that cannot be chosen (nor their descendants).
+	ExcludeTrees []string
 	// Confirm hears the chosen folder.
 	Confirm func(dir string)
+	// ConfirmWith hears the chosen folder and a completion callback for busy state.
+	ConfirmWith func(dir string, done func(error))
 	// Back is the panel to return to when the picker is left.
 	Back sheetState
 }
@@ -153,7 +157,7 @@ const (
 )
 
 // apiHTTP is the client API calls go through: calls end instead of hanging.
-var apiHTTP = &http.Client{Timeout: 30 * time.Second}
+var apiHTTP = &http.Client{Timeout: 30 * time.Second, CheckRedirect: openlist.CheckRedirect}
 
 // App is the state of the whole app.
 type App struct {
@@ -227,6 +231,10 @@ type App struct {
 	// folders wait for, so that a site is not asked for before the app has
 	// the account to ask as.
 	ready *core.Signal[bool]
+	// readyCh is closed once preloadTokens finishes (or immediately when no
+	// vault is used), so background goroutines can wait for tokens without
+	// touching signals.
+	readyCh chan struct{}
 	// vault is the secure store of the tokens, nil where tests give another.
 	vault *vault
 	// keychainTold is whether the user was told this run of a secure store
@@ -243,16 +251,21 @@ type App struct {
 	// taskStatus and offlineSeen track prior statuses so Done/Failed notify once.
 	taskStatus  map[string]transfer.Status
 	offlineSeen map[string]int
+	notifyCount int
+	notifyOK    int
+	notifyFail  int
+	notifySeq   int
+	notifyShown []string
 
 	// Settings.
 	status       *core.Signal[map[string]siteStatus]
 	sitesOpen    *core.Signal[bool]
 	cacheVersion *core.Signal[int]
 
-	mu       sync.Mutex
-	clients  map[string]*openlist.Client
-	cache    map[string]listResult
-	cacheLen int
+	mu         sync.Mutex
+	clients    map[string]*openlist.Client
+	cache      map[string]listResult
+	cacheOrder []string
 }
 
 // sigAlways is a signal that tells its readers on every write, for values
@@ -328,9 +341,12 @@ func newApp(cx *core.Scope, secrets store.Secrets) *App {
 	a.canWrite = core.NewSignal(cx, true)
 	a.logins = core.NewSignal(cx, 0)
 	a.ready = core.NewSignal(cx, true)
+	a.readyCh = make(chan struct{})
 	if v, ok := secrets.(*vault); ok {
 		a.vault = v
 		a.preloadTokens()
+	} else {
+		close(a.readyCh)
 	}
 	a.notified = map[string]bool{}
 	a.taskStatus = map[string]transfer.Status{}
@@ -349,7 +365,14 @@ func newApp(cx *core.Scope, secrets store.Secrets) *App {
 	}
 
 	a.buildResources()
-	a.engine = transfer.New(a.runner, a.transfersChanged, a.taskStore.Get())
+	initialTasks := slices.Clone(a.taskStore.Get())
+	for i := range initialTasks {
+		if initialTasks[i].Direction == transfer.Upload && initialTasks[i].Status != transfer.Done && strings.HasPrefix(initialTasks[i].LocalPath, "mem:") {
+			initialTasks[i].Status = transfer.Failed
+			initialTasks[i].Err = "upload source is no longer available after restart"
+		}
+	}
+	a.engine = transfer.New(a.runner, a.transfersChanged, initialTasks)
 	a.lastDone = -1
 	a.syncTasks()
 	a.bindNotifications()
@@ -451,6 +474,8 @@ func (a *App) buildResources() {
 		})
 }
 
+const maxDirCache = 128
+
 // fetchDir reads a folder, keeping what it read for the next visit.
 func (a *App) fetchDir(ctx context.Context, r listReq, refresh bool) (listResult, error) {
 	l, err := r.Client.List(ctx, r.Dir, refresh)
@@ -461,8 +486,17 @@ func (a *App) fetchDir(ctx context.Context, r listReq, refresh bool) (listResult
 	for i, e := range l.Entries {
 		res.Items[i] = browse.ItemFrom(r.Dir, e)
 	}
+	key := r.Client.BaseURL + "|" + r.Dir
 	a.mu.Lock()
-	a.cache[r.Client.BaseURL+"|"+r.Dir] = res
+	if _, exists := a.cache[key]; !exists {
+		if len(a.cacheOrder) >= maxDirCache {
+			evict := a.cacheOrder[0]
+			a.cacheOrder = a.cacheOrder[1:]
+			delete(a.cache, evict)
+		}
+		a.cacheOrder = append(a.cacheOrder, key)
+	}
+	a.cache[key] = res
 	a.mu.Unlock()
 	return res, nil
 }
@@ -494,6 +528,7 @@ func (a *App) cacheStats() (folders int, bytes int64) {
 func (a *App) clearCache() {
 	a.mu.Lock()
 	a.cache = map[string]listResult{}
+	a.cacheOrder = nil
 	a.mu.Unlock()
 	a.cacheVersion.Update(func(n int) int { return n + 1 })
 	a.listing.Refetch()
@@ -549,7 +584,7 @@ func (a *App) searchItems(q string) []browse.Item {
 // searchBudget allows, and progress hears what they have shown so far.
 func searchBelow(ctx context.Context, r searchReq, progress func([]browse.Item)) ([]browse.Item, error) {
 	hits, err := r.Client.Search(ctx, r.Dir, r.Query)
-	if err == nil && len(hits) > 0 {
+	if err == nil {
 		items := make([]browse.Item, len(hits))
 		for i, h := range hits {
 			items[i] = browse.ItemFromResult(h)
@@ -679,8 +714,8 @@ func (a *App) switchSite(id string) {
 		a.resetBrowse(s.Settings.FilesPath)
 		a.offline.Set(offlineState{})
 	})
-	if a.tab.GetUntracked() == tabTransfers {
-		a.refreshOffline()
+	if a.tab.GetUntracked() == tabTransfers || a.prefs.GetUntracked().NotifyMaster() {
+		a.pollOffline()
 	}
 }
 
@@ -696,17 +731,47 @@ func (a *App) resetBrowse(dir string) {
 	a.path.Set(openlist.Clean(dir))
 }
 
-// removeSite forgets a site and its token.
+// removeSite forgets a site, its token, cached folders, web handle, and tasks.
 func (a *App) removeSite(id string) {
+	var removedURL string
 	var rest []store.Site
 	for _, s := range a.sites.GetUntracked() {
 		if s.ID != id {
 			rest = append(rest, s)
+		} else {
+			removedURL = s.URL
 		}
 	}
 	_ = a.secrets.Remove(id)
+	if isWeb() {
+		webFolderForget(id)
+		a.webFolders.Update(func(m map[string]string) map[string]string { return withoutKey(m, id) })
+	}
+	for _, t := range a.engine.Snapshot() {
+		if t.SiteID == id {
+			a.removeTask(t)
+		}
+	}
+	a.syncTasks()
+	if removedURL != "" {
+		prefix := removedURL + "|"
+		a.mu.Lock()
+		keptOrder := a.cacheOrder[:0]
+		for _, k := range a.cacheOrder {
+			if strings.HasPrefix(k, prefix) {
+				delete(a.cache, k)
+			} else {
+				keptOrder = append(keptOrder, k)
+			}
+		}
+		a.cacheOrder = keptOrder
+		a.mu.Unlock()
+	}
 	a.logins.Update(func(n int) int { return n + 1 })
 	a.cx.Batch(func() {
+		stMap := maps_status_clone(a.status.GetUntracked())
+		delete(stMap, id)
+		a.status.Set(stMap)
 		a.saveSites(rest)
 		if a.siteID.GetUntracked() == id {
 			next := ""
@@ -715,6 +780,7 @@ func (a *App) removeSite(id string) {
 			}
 			a.siteID.Set(next)
 			_ = a.idStore.Set(next)
+			a.offline.Set(offlineState{})
 			if next != "" {
 				s, _ := a.siteByID(next)
 				a.resetBrowse(s.Settings.FilesPath)

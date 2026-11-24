@@ -6,23 +6,33 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strings"
+	"sync/atomic"
 
 	"github.com/nsgo-dev/nsgo/core"
 
 	"github.com/HW618/openlist-client/src/internal/access"
 	"github.com/HW618/openlist-client/src/internal/browse"
+	"github.com/HW618/openlist-client/src/internal/openlist"
 	"github.com/HW618/openlist-client/src/internal/transfer"
 	"github.com/HW618/openlist-client/src/locales"
 )
 
 // downloadClient has no overall timeout: a big file takes as long as it takes,
 // and the task's context stops it.
-var downloadClient = &http.Client{}
+var downloadClient = &http.Client{CheckRedirect: openlist.CheckRedirect}
 
 // runner is the work of a transfer task.
 func (a *App) runner(transfer.Task) transfer.RunFunc {
 	return func(ctx context.Context, t transfer.Task, report func(done, total int64)) error {
+		if a.readyCh != nil {
+			select {
+			case <-a.readyCh:
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+		}
 		c := a.clientByID(t.SiteID)
 		if c == nil {
 			return errors.New("the site of this task was removed")
@@ -42,6 +52,9 @@ func (a *App) runner(transfer.Task) transfer.RunFunc {
 			if err != nil {
 				return err
 			}
+			if obj.RawURL == "" {
+				return errors.New("download: server returned no valid URL")
+			}
 			header := http.Header{}
 			if sameHost(c.BaseURL, obj.RawURL) && c.Token != "" {
 				header.Set("Authorization", c.Token)
@@ -52,9 +65,18 @@ func (a *App) runner(transfer.Task) transfer.RunFunc {
 			case savesThroughDialog() && (t.LocalPath == "" || a.probeDir(t.LocalPath) != nil):
 				return a.saveThroughDialog(ctx, obj.RawURL, header, t.Name, report)
 			}
-			_, err = transfer.Fetch(ctx, downloadClient, obj.RawURL, header, t.LocalPath, t.Name, report)
+			_, err = transfer.FetchWithPart(ctx, downloadClient, obj.RawURL, header, t.LocalPath, t.Name, t.ID, report)
 			return err
 		}
+	}
+}
+
+// removeTask stops/removes a transfer task and cleans up any unfinished .part file.
+func (a *App) removeTask(t transfer.Task) {
+	a.engine.Remove(t.ID)
+	if t.Direction == transfer.Download && t.Status != transfer.Done && t.LocalPath != "" {
+		part := filepath.Join(t.LocalPath, transfer.SafeName(t.ID)+transfer.PartSuffix)
+		_ = os.Remove(part)
 	}
 }
 
@@ -66,8 +88,14 @@ func (a *App) saveThroughDialog(ctx context.Context, link string, header http.He
 	if err != nil {
 		return err
 	}
-	defer os.RemoveAll(dir)
-	path, err := transfer.Fetch(ctx, downloadClient, link, header, dir, name, report)
+	var handedOff atomic.Bool
+	defer func() {
+		if !handedOff.Load() {
+			_ = os.RemoveAll(dir)
+		}
+	}()
+	safe := transfer.SafeName(name)
+	path, err := transfer.Fetch(ctx, downloadClient, link, header, dir, safe, report)
 	if err != nil {
 		return err
 	}
@@ -76,8 +104,15 @@ func (a *App) saveThroughDialog(ctx context.Context, link string, header http.He
 		err   error
 	}
 	got := make(chan answer, 1)
+	handedOff.Store(true)
 	a.cx.Post(func() {
-		a.cx.SaveFile(core.SaveOptions{Name: name, Path: path}, func(saved bool, _ string, err error) { got <- answer{saved, err} })
+		a.cx.SaveFile(core.SaveOptions{Name: safe, Path: path}, func(saved bool, _ string, err error) {
+			_ = os.RemoveAll(dir)
+			select {
+			case got <- answer{saved, err}:
+			default:
+			}
+		})
 	})
 	select {
 	case r := <-got:
@@ -127,7 +162,7 @@ func (a *App) saveInBrowser(ctx context.Context, siteID, link string, header htt
 		}
 		return webDownloadBlob(name, "application/octet-stream", data)
 	}
-	f, err := webFolderCreate(siteID, name)
+	f, err := webFolderCreate(ctx, siteID, name)
 	if err != nil {
 		return err
 	}

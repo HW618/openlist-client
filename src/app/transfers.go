@@ -143,10 +143,10 @@ func (a *App) taskCard(cx *core.Scope, task func() transfer.Task) core.Node {
 		}},
 		core.Show{When: func() bool { s := task().Status; return s == transfer.Active || s == transfer.Paused },
 			Then: func(cx *core.Scope) core.Node {
-				return act(lucide.X, locales.CancelTask(cx), func() { a.engine.Cancel(id); a.syncTasks() })
+				return act(lucide.X, locales.CancelTask(cx), func() { a.removeTask(task()); a.syncTasks() })
 			},
 			Else: func(cx *core.Scope) core.Node {
-				return act(lucide.Trash, locales.RemoveRecord(cx), func() { a.engine.Remove(id); a.syncTasks() })
+				return act(lucide.Trash, locales.RemoveRecord(cx), func() { a.removeTask(task()); a.syncTasks() })
 			}},
 	}}
 	return core.View{Role: core.RoleGroup, Label: t0.Name,

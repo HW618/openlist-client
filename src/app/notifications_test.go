@@ -2,9 +2,12 @@ package app
 
 import (
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -18,7 +21,7 @@ func TestSettingsShowsNotificationToggles(t *testing.T) {
 	srv := newFakeServer(t)
 	prefs, _ := json.Marshal(map[string]any{"version": 1, "value": store.Prefs{
 		View: store.ViewList, Sort: store.SortName,
-		Notifications: store.NotifyPrefs{Set: true, Master: true, Success: true, Failure: true, Asked: true},
+		Notifications: store.NotifyPrefs{Set: true, Master: true, Asked: true},
 	}})
 	sites, _ := json.Marshal(map[string]any{"version": 1, "value": []store.Site{{ID: "s1", Name: "Home", URL: srv.URL}}})
 	app := start(t, nsgotest.Storage(map[string]string{
@@ -27,9 +30,9 @@ func TestSettingsShowsNotificationToggles(t *testing.T) {
 	app.Press("id:tab-settings")
 	app.WaitFor("text:Notifications", time.Second)
 	app.WaitFor("id:notify-master", time.Second)
-	app.WaitFor("id:notify-success", time.Second)
-	app.WaitFor("id:notify-failure", time.Second)
-	app.WaitFor("text:Platform limits", time.Second)
+	if app.Exists("id:notify-success") || app.Exists("id:notify-failure") || app.Exists("text:Platform limits") {
+		t.Fatal("settings should show only the single notification toggle")
+	}
 }
 
 func TestFirstLaunchGuidesNotificationPermission(t *testing.T) {
@@ -75,15 +78,17 @@ func TestTransferDoneShowsMergedNotification(t *testing.T) {
 		b, err := os.ReadFile(filepath.Join(dir, "notes.txt"))
 		return err == nil && string(b) == "hello, world"
 	})
+	var gotID string
 	app.WaitUntil(3*time.Second, func() bool {
 		for _, n := range app.Notifications {
-			if n.ID == notifyTransferDone {
+			if strings.HasPrefix(n.ID, notifyItemPrefix) && strings.Contains(n.Title, "notes.txt") {
+				gotID = n.ID
 				return true
 			}
 		}
 		return false
 	})
-	app.PressNotification(notifyTransferDone)
+	app.PressNotification(gotID)
 	app.WaitFor("id:filter-all", time.Second)
 }
 
@@ -164,7 +169,7 @@ func TestNotifyMasterOffSkipsNotification(t *testing.T) {
 	deadline := time.Now().Add(800 * time.Millisecond)
 	for time.Now().Before(deadline) {
 		for _, n := range app.Notifications {
-			if n.ID == notifyTransferDone || n.ID == notifyTransferFailed {
+			if strings.HasPrefix(n.ID, notifyItemPrefix) || n.ID == notifySummaryID {
 				t.Fatalf("master off should not notify, got %+v", n)
 			}
 		}
@@ -218,4 +223,203 @@ func (d *dualFake) Delete(account string) error {
 	err := d.cur.Delete(account)
 	_ = d.old.Delete(account)
 	return err
+}
+
+func TestDismissingNotifyGuideLaterStillPromptsFromSettings(t *testing.T) {
+	startupChecks = true
+	notifyGuide = true
+	t.Cleanup(func() {
+		startupChecks = false
+		notifyGuide = false
+	})
+	srv := newFakeServer(t)
+	app := nsgotest.Start(t, func(cx *core.Scope) core.Node {
+		return rootWith(cx, &store.MemorySecrets{})
+	}, seed(srv.URL))
+	app.WaitFor("id:access-later", 2*time.Second)
+	app.Press("id:access-later")
+	app.WaitForGone("id:access-issue", time.Second)
+
+	app.Press("id:tab-settings")
+	app.WaitFor("id:notify-master", time.Second)
+	app.Press("id:notify-master")
+	app.Press("id:notify-master")
+	app.WaitUntil(2*time.Second, func() bool {
+		return app.NotificationPermission == core.NotificationsGranted
+	})
+}
+
+func TestNotifyOfflineOutcomesNotifiesFastFinishAfterBaseline(t *testing.T) {
+	var phase atomic.Int32
+	mux := http.NewServeMux()
+	reply := func(w http.ResponseWriter, data any) {
+		_ = json.NewEncoder(w).Encode(map[string]any{"code": 200, "message": "success", "data": data})
+	}
+	mux.HandleFunc("/api/fs/list", func(w http.ResponseWriter, r *http.Request) {
+		reply(w, map[string]any{"content": []any{}, "total": 0, "provider": "Local"})
+	})
+	mux.HandleFunc("/api/admin/task/", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/admin/task/offline_download/done" {
+			if phase.Load() == 0 {
+				reply(w, []map[string]any{{"id": "old", "name": "old.iso", "state": 2, "progress": 100}})
+				return
+			}
+			reply(w, []map[string]any{
+				{"id": "old", "name": "old.iso", "state": 2, "progress": 100},
+				{"id": "fast", "name": "fast.iso", "state": 2, "progress": 100},
+			})
+			return
+		}
+		reply(w, []any{})
+	})
+	srv := httptest.NewServer(cors(mux))
+	t.Cleanup(srv.Close)
+
+	prefs, _ := json.Marshal(map[string]any{"version": 1, "value": store.Prefs{
+		View: store.ViewList, Sort: store.SortName,
+		Notifications: store.NotifyPrefs{Set: true, Master: true, Success: true, Failure: true, Asked: true},
+	}})
+	sites, _ := json.Marshal(map[string]any{"version": 1, "value": []store.Site{{ID: "s1", Name: "Home", URL: srv.URL}}})
+	app := start(t, nsgotest.Storage(map[string]string{
+		"sites": string(sites), "currentSite": `{"version":1,"value":"s1"}`, "prefs": string(prefs),
+	}))
+	app.NotificationPermission = core.NotificationsGranted
+	app.Press("id:tab-transfers")
+	app.WaitFor("text:old.iso", 2*time.Second)
+	for _, n := range app.Notifications {
+		if strings.HasPrefix(n.ID, notifyItemPrefix) || n.ID == notifySummaryID {
+			t.Fatalf("baseline finished task should not notify, got %+v", n)
+		}
+	}
+	phase.Store(1)
+	app.Press("role:button Refresh offline tasks")
+	app.WaitFor("text:fast.iso", 2*time.Second)
+	app.WaitUntil(2*time.Second, func() bool {
+		for _, n := range app.Notifications {
+			if strings.HasPrefix(n.ID, notifyItemPrefix) && strings.Contains(n.Title, "fast.iso") {
+				return true
+			}
+		}
+		return false
+	})
+}
+
+func TestNotificationsAlwaysNotifyAndCollapseWhenTooMany(t *testing.T) {
+	var phase atomic.Int32
+	mux := http.NewServeMux()
+	reply := func(w http.ResponseWriter, data any) {
+		_ = json.NewEncoder(w).Encode(map[string]any{"code": 200, "message": "success", "data": data})
+	}
+	mux.HandleFunc("/api/fs/list", func(w http.ResponseWriter, r *http.Request) {
+		reply(w, map[string]any{"content": []any{}, "total": 0, "provider": "Local"})
+	})
+	mux.HandleFunc("/api/admin/task/", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/admin/task/offline_download/done" {
+			base := map[string]any{"id": "old", "name": "old.iso", "state": 2, "progress": 100}
+			switch phase.Load() {
+			case 0:
+				reply(w, []map[string]any{base})
+				return
+			case 1:
+				reply(w, []map[string]any{
+					base,
+					{"id": "t1", "name": "a.zip", "state": 2, "progress": 100},
+					{"id": "t2", "name": "b.zip", "state": 2, "progress": 100},
+					{"id": "t3", "name": "bad.iso", "state": 7, "progress": 50},
+				})
+				return
+			case 2:
+				reply(w, []map[string]any{
+					base,
+					{"id": "t1", "name": "a.zip", "state": 2, "progress": 100},
+					{"id": "t2", "name": "b.zip", "state": 2, "progress": 100},
+					{"id": "t3", "name": "bad.iso", "state": 7, "progress": 50},
+					{"id": "t4", "name": "c.tar", "state": 2, "progress": 100},
+				})
+				return
+			case 3:
+				reply(w, []map[string]any{
+					base,
+					{"id": "t1", "name": "a.zip", "state": 2, "progress": 100},
+					{"id": "t2", "name": "b.zip", "state": 2, "progress": 100},
+					{"id": "t3", "name": "bad.iso", "state": 7, "progress": 50},
+					{"id": "t4", "name": "c.tar", "state": 2, "progress": 100},
+					{"id": "t5", "name": "d.txt", "state": 2, "progress": 100},
+				})
+				return
+			}
+		}
+		reply(w, []any{})
+	})
+	srv := httptest.NewServer(cors(mux))
+	t.Cleanup(srv.Close)
+
+	prefs, _ := json.Marshal(map[string]any{"version": 1, "value": store.Prefs{
+		View: store.ViewList, Sort: store.SortName,
+		// Legacy Success/Failure false values must not suppress notifications when Master is on.
+		Notifications: store.NotifyPrefs{Set: true, Master: true, Success: false, Failure: false, Asked: true},
+	}})
+	sites, _ := json.Marshal(map[string]any{"version": 1, "value": []store.Site{{ID: "s1", Name: "Home", URL: srv.URL}}})
+	app := start(t, nsgotest.Storage(map[string]string{
+		"sites": string(sites), "currentSite": `{"version":1,"value":"s1"}`, "prefs": string(prefs),
+	}))
+	app.NotificationPermission = core.NotificationsGranted
+	app.Press("id:tab-transfers")
+	app.WaitFor("text:old.iso", 2*time.Second)
+
+	// Phase 1: 3 items (2 done, 1 failed) -> 3 individual notifications, not collapsed.
+	phase.Store(1)
+	app.Press("role:button Refresh offline tasks")
+	app.WaitFor("text:bad.iso", 2*time.Second)
+	app.WaitUntil(2*time.Second, func() bool {
+		var seenDoneA, seenDoneB, seenFailBad bool
+		for _, n := range app.Notifications {
+			if !strings.HasPrefix(n.ID, notifyItemPrefix) {
+				continue
+			}
+			if strings.Contains(n.Title, "a.zip") {
+				seenDoneA = true
+			}
+			if strings.Contains(n.Title, "b.zip") {
+				seenDoneB = true
+			}
+			if strings.Contains(n.Title, "bad.iso") {
+				seenFailBad = true
+			}
+		}
+		return seenDoneA && seenDoneB && seenFailBad
+	})
+
+	// Phase 2: 4th item arrives -> individual notifications close and collapse into summary.
+	phase.Store(2)
+	app.Press("role:button Refresh offline tasks")
+	app.WaitFor("text:c.tar", 2*time.Second)
+	app.WaitUntil(2*time.Second, func() bool {
+		hasItem := false
+		var summary *core.Notification
+		for i := range app.Notifications {
+			n := app.Notifications[i]
+			if strings.HasPrefix(n.ID, notifyItemPrefix) {
+				hasItem = true
+			}
+			if n.ID == notifySummaryID {
+				summary = &n
+			}
+		}
+		return !hasItem && summary != nil && strings.Contains(summary.Title, "4 tasks finished (3 done, 1 failed)")
+	})
+
+	// Pressing the summary clears the batch so the next item notifies individually again.
+	app.PressNotification(notifySummaryID)
+	phase.Store(3)
+	app.Press("role:button Refresh offline tasks")
+	app.WaitFor("text:d.txt", 2*time.Second)
+	app.WaitUntil(2*time.Second, func() bool {
+		for _, n := range app.Notifications {
+			if strings.HasPrefix(n.ID, notifyItemPrefix) && strings.Contains(n.Title, "d.txt") {
+				return true
+			}
+		}
+		return false
+	})
 }

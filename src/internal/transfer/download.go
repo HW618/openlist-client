@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 )
 
 // PartSuffix ends the name of a download that is not finished.
@@ -24,6 +25,13 @@ const PartSuffix = ".part"
 // answers with the whole file. report hears how many bytes are on disk and
 // how many the file has, 0 when unknown.
 func Fetch(ctx context.Context, hc *http.Client, url string, header http.Header, dir, name string, report func(done, total int64)) (string, error) {
+	return FetchWithPart(ctx, hc, url, header, dir, name, "", report)
+}
+
+// FetchWithPart is Fetch with a caller-chosen base name for the temporary .part
+// file (without PartSuffix), so concurrent or distinct tasks sharing a display
+// name do not collide on disk while still resuming across retries.
+func FetchWithPart(ctx context.Context, hc *http.Client, url string, header http.Header, dir, name, partName string, report func(done, total int64)) (string, error) {
 	if hc == nil {
 		hc = http.DefaultClient
 	}
@@ -31,15 +39,30 @@ func Fetch(ctx context.Context, hc *http.Client, url string, header http.Header,
 		return "", err
 	}
 	name = SafeName(name)
-	part := filepath.Join(dir, name+PartSuffix)
-
-	var have int64
-	if st, err := os.Stat(part); err == nil {
-		have = st.Size()
+	partBase := name
+	if partName != "" {
+		partBase = SafeName(partName)
 	}
+	part := filepath.Join(dir, partBase+PartSuffix)
+
+	for attempt := 0; attempt < 2; attempt++ {
+		var have int64
+		if st, err := os.Stat(part); err == nil {
+			have = st.Size()
+		}
+		dest, retry, err := fetchOnce(ctx, hc, url, header, dir, name, part, have, report)
+		if !retry {
+			return dest, err
+		}
+		_ = os.Remove(part)
+	}
+	return "", errors.New("download: range mismatch persisted")
+}
+
+func fetchOnce(ctx context.Context, hc *http.Client, url string, header http.Header, dir, name, part string, have int64, report func(done, total int64)) (dest string, retry bool, err error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		return "", err
+		return "", false, err
 	}
 	for k, vs := range header {
 		for _, v := range vs {
@@ -51,7 +74,7 @@ func Fetch(ctx context.Context, hc *http.Client, url string, header http.Header,
 	}
 	resp, err := hc.Do(req)
 	if err != nil {
-		return "", err
+		return "", false, err
 	}
 	defer resp.Body.Close()
 
@@ -59,14 +82,26 @@ func Fetch(ctx context.Context, hc *http.Client, url string, header http.Header,
 	var total int64
 	switch {
 	case resp.StatusCode == http.StatusPartialContent && have > 0:
-		flags |= os.O_APPEND
-		total = have + resp.ContentLength
-		if resp.ContentLength < 0 {
-			total = 0
+		if start, crTotal, ok := parseContentRange(resp.Header.Get("Content-Range")); ok {
+			if start != have {
+				return "", true, nil
+			}
+			if crTotal > 0 {
+				total = crTotal
+			}
 		}
+		if total == 0 {
+			if resp.ContentLength >= 0 {
+				total = have + resp.ContentLength
+			}
+		}
+		flags |= os.O_APPEND
 	case resp.StatusCode == http.StatusRequestedRangeNotSatisfiable && have > 0:
-		// The part is as long as the file: nothing is left to fetch.
-		return finish(part, dir, name)
+		if crTotal, ok := parseUnsatisfiableRange(resp.Header.Get("Content-Range")); ok && have == crTotal {
+			p, ferr := finish(part, dir, name)
+			return p, false, ferr
+		}
+		return "", true, nil
 	case resp.StatusCode == http.StatusOK:
 		flags |= os.O_TRUNC
 		have = 0
@@ -74,12 +109,12 @@ func Fetch(ctx context.Context, hc *http.Client, url string, header http.Header,
 			total = resp.ContentLength
 		}
 	default:
-		return "", fmt.Errorf("download: the server answered %s", resp.Status)
+		return "", false, fmt.Errorf("download: the server answered %s", resp.Status)
 	}
 
 	f, err := os.OpenFile(part, flags, 0o644)
 	if err != nil {
-		return "", err
+		return "", false, err
 	}
 	done := have
 	if report != nil {
@@ -91,7 +126,7 @@ func Fetch(ctx context.Context, hc *http.Client, url string, header http.Header,
 		if n > 0 {
 			if _, werr := f.Write(buf[:n]); werr != nil {
 				f.Close()
-				return "", werr
+				return "", false, werr
 			}
 			done += int64(n)
 			if report != nil {
@@ -103,21 +138,74 @@ func Fetch(ctx context.Context, hc *http.Client, url string, header http.Header,
 		}
 		if rerr != nil {
 			f.Close()
-			return "", rerr
+			return "", false, rerr
 		}
 	}
 	if err := f.Close(); err != nil {
-		return "", err
+		return "", false, err
 	}
 	if total > 0 && done < total {
-		return "", errors.New("download: the connection closed before the file ended")
+		return "", false, errors.New("download: the connection closed before the file ended")
 	}
-	return finish(part, dir, name)
+	p, ferr := finish(part, dir, name)
+	return p, false, ferr
 }
+
+// parseContentRange parses "bytes <start>-<end>/<total|*>".
+func parseContentRange(v string) (start, total int64, ok bool) {
+	v = strings.TrimSpace(v)
+	if !strings.HasPrefix(strings.ToLower(v), "bytes ") {
+		return 0, 0, false
+	}
+	rest := strings.TrimSpace(v[len("bytes "):])
+	rng, tot, hasSlash := strings.Cut(rest, "/")
+	if !hasSlash {
+		return 0, 0, false
+	}
+	sStr, _, hasDash := strings.Cut(rng, "-")
+	if !hasDash {
+		return 0, 0, false
+	}
+	s, err := strconv.ParseInt(strings.TrimSpace(sStr), 10, 64)
+	if err != nil || s < 0 {
+		return 0, 0, false
+	}
+	tot = strings.TrimSpace(tot)
+	if tot != "*" {
+		t, err := strconv.ParseInt(tot, 10, 64)
+		if err != nil || t < 0 {
+			return 0, 0, false
+		}
+		return s, t, true
+	}
+	return s, 0, true
+}
+
+// parseUnsatisfiableRange parses "bytes */<total>" from a 416 response.
+func parseUnsatisfiableRange(v string) (total int64, ok bool) {
+	v = strings.TrimSpace(v)
+	if !strings.HasPrefix(strings.ToLower(v), "bytes ") {
+		return 0, false
+	}
+	rest := strings.TrimSpace(v[len("bytes "):])
+	rng, tot, hasSlash := strings.Cut(rest, "/")
+	if !hasSlash || strings.TrimSpace(rng) != "*" {
+		return 0, false
+	}
+	t, err := strconv.ParseInt(strings.TrimSpace(tot), 10, 64)
+	if err != nil || t < 0 {
+		return 0, false
+	}
+	return t, true
+}
+
+var finishMu sync.Mutex
 
 // finish moves a completed part file to its final name, which is made unique
 // when a file of that name exists.
 func finish(part, dir, name string) (string, error) {
+	finishMu.Lock()
+	defer finishMu.Unlock()
 	dest := UniquePath(dir, name)
 	if err := os.Rename(part, dest); err != nil {
 		return "", err
@@ -143,12 +231,30 @@ func UniquePath(dir, name string) string {
 }
 
 // SafeName is name made fit to be a file name on any system: without path
-// separators or the characters Windows refuses.
+// separators, control characters, Windows reserved names, or characters Windows refuses.
 func SafeName(name string) string {
 	r := strings.NewReplacer("/", "_", "\\", "_", ":", "_", "*", "_", "?", "_", "\"", "_", "<", "_", ">", "_", "|", "_")
-	name = strings.TrimSpace(r.Replace(name))
+	name = r.Replace(name)
+	var b strings.Builder
+	b.Grow(len(name))
+	for _, ch := range name {
+		if ch < 0x20 || ch == 0x7f {
+			b.WriteByte('_')
+			continue
+		}
+		b.WriteRune(ch)
+	}
+	name = strings.TrimSpace(b.String())
+	name = strings.TrimRight(name, ". ")
 	if name == "" || name == "." || name == ".." {
 		return "download"
+	}
+	stem, _, _ := strings.Cut(name, ".")
+	switch strings.ToUpper(stem) {
+	case "CON", "PRN", "AUX", "NUL",
+		"COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9",
+		"LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9":
+		return "_" + name
 	}
 	return name
 }

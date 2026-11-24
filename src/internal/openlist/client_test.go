@@ -246,3 +246,57 @@ func TestOfflineTasksAreListedWithRunningFirst(t *testing.T) {
 		t.Fatalf("last request = %q", last)
 	}
 }
+
+func TestAbsoluteRejectsNonHTTPSchemes(t *testing.T) {
+	c := &Client{BaseURL: "https://pan.example.com"}
+	for in, want := range map[string]string{
+		"/d/a.txt":                 "https://pan.example.com/d/a.txt",
+		"d/a.txt":                  "https://pan.example.com/d/a.txt",
+		"https://cdn.example/a":    "https://cdn.example/a",
+		"http://cdn.example/a":     "http://cdn.example/a",
+		"file:///etc/passwd":       "",
+		"javascript:alert(1)":      "",
+		"data:text/html,<script>":  "",
+	} {
+		if got := c.Absolute(in); got != want {
+			t.Errorf("Absolute(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestCheckRedirectStripsAuthOnHTTPSDowngrade(t *testing.T) {
+	prevReq, _ := http.NewRequest(http.MethodGet, "https://pan.example.com/d/file", nil)
+	prevReq.Header.Set("Authorization", "secret-token")
+
+	downgradeReq, _ := http.NewRequest(http.MethodGet, "http://pan.example.com/d/file", nil)
+	downgradeReq.Header.Set("Authorization", "secret-token")
+	if err := CheckRedirect(downgradeReq, []*http.Request{prevReq}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got := downgradeReq.Header.Get("Authorization"); got != "" {
+		t.Fatalf("Authorization leaked on https->http downgrade: %q", got)
+	}
+
+	crossHostReq, _ := http.NewRequest(http.MethodGet, "https://cdn.example.com/file", nil)
+	crossHostReq.Header.Set("Authorization", "secret-token")
+	if err := CheckRedirect(crossHostReq, []*http.Request{prevReq}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got := crossHostReq.Header.Get("Authorization"); got != "" {
+		t.Fatalf("Authorization leaked on cross-host redirect: %q", got)
+	}
+
+	sameHTTPSReq, _ := http.NewRequest(http.MethodGet, "https://pan.example.com/d/other", nil)
+	sameHTTPSReq.Header.Set("Authorization", "secret-token")
+	if err := CheckRedirect(sameHTTPSReq, []*http.Request{prevReq}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got := sameHTTPSReq.Header.Get("Authorization"); got != "secret-token" {
+		t.Fatalf("Authorization stripped on same-host https redirect: %q", got)
+	}
+
+	fileReq, _ := http.NewRequest(http.MethodGet, "file:///etc/passwd", nil)
+	if err := CheckRedirect(fileReq, []*http.Request{prevReq}); err == nil {
+		t.Fatal("expected error for non-HTTP redirect scheme")
+	}
+}

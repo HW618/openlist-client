@@ -6,17 +6,18 @@
     Files 标签 / 面包屑 / 排序 / 视图切换 ... src/app/files.go
     Transfers 标签 / 离线下载区块 .......... src/app/transfers.go · src/app/offline.go（离线区块仅管理员可见）
     Settings 标签 / 站点列表（默认只显示当前站点，右侧箭头展开，最高 320 滚动） ... src/app/settings.go
-    Settings · 通知开关组 .................... src/app/settings.go · 通知偏好（待实现，ROADMAP §1）
+    Settings · 站点状态与路径显示（状态支持换行；目录路径独立一行完整展示） .......... src/app/settings.go
+    Settings · 通知开关（仅保留单一开启开关；成功与失败均通知；条目较多时折叠汇总） ...... src/app/settings.go · src/app/notifications.go
     系统通知点击跳转 ......................... cx.OnNotificationPress → 传输 / 离线下载
     各类底部面板 / 对话框 ................... src/app/sheets.go（宽 ≥ 640 为对话框，否则为底部面板）
     权限对话框 ............................... src/app/permissions.go · src/internal/access
-    通知权限被拒引导 ......................... src/app/permissions.go（通知类，待实现）
+    通知权限引导与被拒引导 ................... src/app/permissions.go
     预览 / 悬浮按钮 .......................... src/app/preview.go · src/app/fabview.go
 
   演示参数（URL query）
     ?platform=desktop|web|android   切换“本机默认下载位置”的平台变体
     ?perm=folder,network,server,browser,keychain,notifications  启动即弹出对应的权限对话框
-    ?notify=1                       演示一条合并后的任务完成通知（可点击跳到传输）
+    ?notify=1                       演示一条折叠汇总后的任务通知（可点击跳到传输）
     （默认）首次启动引导开启通知权限：弹出「允许通知」对话框，点「允许通知」再请求系统权限
 
   布局沿用 OD-LAYOUT-PRIMITIVES v1，样式沿用 Apple Design System 令牌与平台中性手机外壳。
@@ -932,6 +933,36 @@
       overscroll-behavior: contain;
       padding-right: 6px;
     }
+    .setting-row-stacked {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 8px;
+    }
+    .setting-row-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--space-3);
+      min-width: 0;
+    }
+    .setting-path-pill {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      width: 100%;
+      min-width: 0;
+      padding: 8px 10px;
+      border-radius: var(--radius-xs);
+      border: 1px solid var(--border-soft);
+      background: var(--surface);
+      color: var(--muted);
+      font-size: var(--text-xs);
+      line-height: 1.4;
+      text-align: left;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
     .setting-value-btn {
       max-width: 52%;
       min-width: 0;
@@ -1688,37 +1719,10 @@
                 <div class="group-card">
                   <div class="setting-row">
                     <div>
-                      <div class="setting-title">任务完成通知</div>
-                      <div class="setting-desc">上传、下载与离线任务完成或失败时发出系统通知</div>
+                      <div class="setting-title">开启通知</div>
+                      <div class="setting-desc">上传、下载与离线任务成功或失败时都会发出系统通知；条目太多时自动折叠汇总</div>
                     </div>
-                    <button type="button" class="switch" id="toggleNotifyMaster" role="switch" aria-checked="true" aria-label="任务完成通知"></button>
-                  </div>
-                  <div class="setting-row" id="rowNotifySuccess">
-                    <div>
-                      <div class="setting-title">成功时通知</div>
-                      <div class="setting-desc">任务成功完成时提醒；多条合并为一条</div>
-                    </div>
-                    <button type="button" class="switch" id="toggleNotifySuccess" role="switch" aria-checked="true" aria-label="成功时通知"></button>
-                  </div>
-                  <div class="setting-row" id="rowNotifyFailure">
-                    <div>
-                      <div class="setting-title">失败时通知</div>
-                      <div class="setting-desc">任务失败时提醒</div>
-                    </div>
-                    <button type="button" class="switch" id="toggleNotifyFailure" role="switch" aria-checked="true" aria-label="失败时通知"></button>
-                  </div>
-                  <div class="setting-row" style="align-items:flex-start">
-                    <div>
-                      <div class="setting-title">平台限制</div>
-                      <div class="setting-desc" id="notifyLimitsDesc">应用被系统杀掉后传输会中断，也就没有通知；离线下载在服务器完成时，应用未运行也收不到。Linux 与网页版只显示本次运行发出的通知。Windows 点击通知需通过安装包安装过本应用。</div>
-                    </div>
-                  </div>
-                  <div class="setting-row" id="rowNotifyDemo">
-                    <div>
-                      <div class="setting-title">演示通知</div>
-                      <div class="setting-desc">弹出一条合并通知，点击后跳到「传输」</div>
-                    </div>
-                    <button type="button" class="text-btn" id="btnDemoNotify">演示</button>
+                    <button type="button" class="switch" id="toggleNotifyMaster" role="switch" aria-checked="true" aria-label="开启通知"></button>
                   </div>
                 </div>
               </div>
@@ -1726,36 +1730,47 @@
               <div class="settings-group">
                 <h2 class="group-label">目录与下载路径 <span id="settingsSiteScope" style="font-weight:500; color:var(--accent); text-transform:none; letter-spacing:0"></span></h2>
                 <div class="group-card">
-                  <div class="setting-row">
-                    <div class="od-fill" style="min-width:0">
-                      <div class="setting-title">文件页默认目录</div>
-                      <div class="setting-desc">打开应用或切换站点时默认进入的目录</div>
+                  <div class="setting-row setting-row-stacked">
+                    <div class="setting-row-head">
+                      <div class="od-fill" style="min-width:0">
+                        <div class="setting-title">文件页默认目录</div>
+                        <div class="setting-desc">打开应用或切换站点时默认进入的目录</div>
+                      </div>
+                      <button type="button" class="text-btn od-fixed" data-trigger-for="btnPrefDefaultFilesDir">更改</button>
                     </div>
-                    <button type="button" class="tool-chip setting-value-btn" id="btnPrefDefaultFilesDir" title="设置文件页默认目录">
-                      <span class="od-truncate" id="prefDefaultFilesDirLabel">根目录</span>
+                    <button type="button" class="setting-path-pill" id="btnPrefDefaultFilesDir" title="设置文件页默认目录">
+                      <span style="min-width:0; overflow-wrap:anywhere" id="prefDefaultFilesDirLabel">根目录</span>
                       <svg class="od-icon" style="--od-icon-size:14px; flex:none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
                     </button>
                   </div>
-                  <div class="setting-row">
-                    <div class="od-fill" style="min-width:0">
-                      <div class="setting-title">离线下载默认文件夹</div>
-                      <div class="setting-desc">在根目录发起离线下载时的默认保存位置</div>
+                  <div class="setting-row setting-row-stacked">
+                    <div class="setting-row-head">
+                      <div class="od-fill" style="min-width:0">
+                        <div class="setting-title">离线下载默认文件夹</div>
+                        <div class="setting-desc">在根目录发起离线下载时的默认保存位置</div>
+                      </div>
+                      <button type="button" class="text-btn od-fixed" data-trigger-for="btnPrefDefaultOfflineDir">更改</button>
                     </div>
-                    <button type="button" class="tool-chip setting-value-btn" id="btnPrefDefaultOfflineDir" title="设置离线下载默认文件夹">
-                      <span class="od-truncate" id="prefDefaultOfflineDirLabel">本地存储</span>
+                    <button type="button" class="setting-path-pill" id="btnPrefDefaultOfflineDir" title="设置离线下载默认文件夹">
+                      <span style="min-width:0; overflow-wrap:anywhere" id="prefDefaultOfflineDirLabel">本地存储</span>
                       <svg class="od-icon" style="--od-icon-size:14px; flex:none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
                     </button>
                   </div>
-                  <div class="setting-row">
-                    <div class="od-fill" style="min-width:0">
-                      <div class="setting-title">本机默认下载位置</div>
-                      <div class="setting-desc">默认为系统下载文件夹，点击更改</div>
+                  <div class="setting-row setting-row-stacked">
+                    <div class="setting-row-head">
+                      <div class="od-fill" style="min-width:0">
+                        <div class="setting-title">本机默认下载位置</div>
+                        <div class="setting-desc">默认为系统下载文件夹，点击更改</div>
+                      </div>
+                      <div class="od-row od-fixed" style="--od-gap:6px">
+                        <button type="button" class="text-btn muted" id="btnClearLocalDir" hidden>清除</button>
+                        <button type="button" class="text-btn" data-trigger-for="btnPrefLocalDownloadDir">更改</button>
+                      </div>
                     </div>
-                    <button type="button" class="tool-chip setting-value-btn" id="btnPrefLocalDownloadDir" title="设置本机默认下载位置">
-                      <span class="od-truncate" id="prefLocalDownloadDirLabel">~/Downloads/OpenList</span>
+                    <button type="button" class="setting-path-pill" id="btnPrefLocalDownloadDir" title="设置本机默认下载位置">
+                      <span style="min-width:0; overflow-wrap:anywhere" id="prefLocalDownloadDirLabel">~/Downloads/OpenList</span>
                       <svg class="od-icon" style="--od-icon-size:14px; flex:none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
                     </button>
-                    <button type="button" class="text-btn muted" id="btnClearLocalDir" hidden>清除</button>
                   </div>
                 </div>
                 <input type="file" id="inpLocalDirPicker" webkitdirectory directory multiple hidden />
@@ -1959,10 +1974,8 @@
         offlineDraft: { url: '', tool: 'aria2' },
         dirPickerMode: null,
         dirPickerBrowsePathIds: ['root'],
-        // 通知偏好（ROADMAP §1）：总开关、成功/失败默认开；首次启动引导开启权限
+        // 通知偏好：仅保留开启开关；开启后成功和失败都通知，条目过多时折叠汇总
         notifyMaster: true,
-        notifySuccess: true,
-        notifyFailure: true,
         notifyPermission: 'not-asked', // 'not-asked' | 'granted' | 'denied'
         notifyAsked: false,
 
@@ -2170,11 +2183,6 @@
       const siteListCard = $('#siteListCard');
       const toggleDarkMode = $('#toggleDarkMode');
       const toggleNotifyMaster = $('#toggleNotifyMaster');
-      const toggleNotifySuccess = $('#toggleNotifySuccess');
-      const toggleNotifyFailure = $('#toggleNotifyFailure');
-      const rowNotifySuccess = $('#rowNotifySuccess');
-      const rowNotifyFailure = $('#rowNotifyFailure');
-      const btnDemoNotify = $('#btnDemoNotify');
       const sysNotifyEl = $('#sysNotifyEl');
       const sysNotifyTitle = $('#sysNotifyTitle');
       const sysNotifyBody = $('#sysNotifyBody');
@@ -2812,7 +2820,7 @@
                 <span class="setting-title od-truncate">${escapeHtml(s.name)}</span>
                 ${isCurrent ? '<span class="driver-tag od-fixed">当前</span>' : ''}
               </div>
-              <div class="setting-desc od-truncate" style="margin-top:0">${escapeHtml(siteStatusLine(s))}</div>
+              <div class="setting-desc" style="margin-top:0; overflow-wrap:anywhere">${escapeHtml(siteStatusLine(s))}</div>
               <div class="site-actions">
                 <button type="button" class="mini-btn" data-site-test="${s.id}">测试</button>
                 ${needLogin ? `<button type="button" class="mini-btn" data-site-signin="${s.id}">登录</button>` : ''}
@@ -2879,10 +2887,6 @@
 
         const masterOn = !!state.notifyMaster;
         toggleNotifyMaster.setAttribute('aria-checked', masterOn ? 'true' : 'false');
-        toggleNotifySuccess.setAttribute('aria-checked', state.notifySuccess ? 'true' : 'false');
-        toggleNotifyFailure.setAttribute('aria-checked', state.notifyFailure ? 'true' : 'false');
-        rowNotifySuccess.classList.toggle('is-disabled', !masterOn);
-        rowNotifyFailure.classList.toggle('is-disabled', !masterOn);
       }
 
       /* ─── Preview Screen ─── */
@@ -3912,24 +3916,14 @@
         }
         renderSettings();
       });
-      toggleNotifySuccess.addEventListener('click', () => {
-        if (!state.notifyMaster) return;
-        state.notifySuccess = !state.notifySuccess;
-        renderSettings();
-      });
-      toggleNotifyFailure.addEventListener('click', () => {
-        if (!state.notifyMaster) return;
-        state.notifyFailure = !state.notifyFailure;
-        renderSettings();
-      });
-      btnDemoNotify.addEventListener('click', () => {
-        if (state.notifySuccess) {
-          showSysNotify('3 个文件已下载', '点击查看传输记录', 'transfer:done');
-        } else {
-          showToast('已关闭成功通知');
-        }
-      });
       sysNotifyEl.addEventListener('click', pressSysNotify);
+
+      $$('[data-trigger-for]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const target = document.getElementById(btn.dataset.triggerFor);
+          if (target) target.click();
+        });
+      });
 
       $$('[data-pref-view]').forEach((btn) => {
         btn.addEventListener('click', () => {
@@ -4448,7 +4442,7 @@
         if (issues.length) openPermissionSheet(issues);
       }
       if (bootParams.get('notify') === '1') {
-        setTimeout(() => showSysNotify('3 个文件已下载', '点击查看传输记录', 'transfer:done'), 400);
+        setTimeout(() => showSysNotify('4 个任务已结束（成功 3，失败 1）', '条目较多已折叠，点击查看传输记录', 'transfer:summary'), 400);
       }
       // 首次启动：引导开启通知（不必等到第一个任务完成）。?perm= 已含 notifications 时不重复弹出。
       if (!state.notifyAsked && !permParam) {

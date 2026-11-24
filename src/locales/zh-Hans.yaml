@@ -216,20 +216,17 @@ groupAppearance: 外观与浏览偏好
 groupNotifications: 通知
 groupPaths: 目录与下载路径
 groupAbout: 存储与关于
-notifyMaster: 任务完成通知
-notifyMasterDesc: 上传、下载与离线任务完成或失败时发出系统通知
-notifySuccess: 成功时通知
-notifySuccessDesc: 任务成功完成时提醒；多条合并为一条
-notifyFailure: 失败时通知
-notifyFailureDesc: 任务失败时提醒
-notifyLimitsTitle: 平台限制
-notifyLimitsDesc: 应用被系统杀掉后传输会中断，也就没有通知；离线下载在服务器完成时，应用未运行也收不到。Linux 与网页版只显示本次运行发出的通知。Windows 点击通知需通过安装包安装过本应用。
-notifyDownloadDone: "{count, plural, other {# 个文件已下载}}"
-notifyUploadDone: "{count, plural, other {# 个文件已上传}}"
-notifyTransferBoth: "{count, plural, other {# 个传输已完成}}"
-notifyTransferFailed: "{count, plural, other {# 个传输失败}}"
-notifyOfflineDone: "{count, plural, other {# 个离线下载已完成}}"
-notifyOfflineFailed: "{count, plural, other {# 个离线下载失败}}"
+notifyMaster: 开启通知
+notifyMasterDesc: 上传、下载与离线任务成功或失败时都会发出系统通知；条目太多时自动折叠汇总
+notifyItemDownloadDone: "已下载：{name}"
+notifyItemUploadDone: "已上传：{name}"
+notifyItemTransferFailed: "传输失败：{name}"
+notifyItemOfflineDone: "离线下载完成：{name}"
+notifyItemOfflineFailed: "离线下载失败：{name}"
+notifySummaryDone: "{count, plural, other {# 个任务已完成}}"
+notifySummaryFailed: "{count, plural, other {# 个任务失败}}"
+notifySummaryMixed: "{total, plural, other {# 个任务已结束}}（成功 {ok}，失败 {fail}）"
+notifySummaryCollapsedBody: 条目较多已折叠，点击查看传输记录
 notifyOpenTransfers: 点击查看传输记录
 siteLatency: "{latency}"
 siteLatencyLine: "{url} · 延迟 {latency}"

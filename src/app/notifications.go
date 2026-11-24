@@ -1,6 +1,10 @@
 package app
 
 import (
+	"fmt"
+	"strconv"
+	"strings"
+
 	"github.com/nsgo-dev/nsgo/core"
 
 	"github.com/HW618/openlist-client/src/internal/access"
@@ -10,13 +14,18 @@ import (
 	"github.com/HW618/openlist-client/src/locales"
 )
 
-// Fixed notification IDs: showing again replaces the previous one (merge).
 const (
-	notifyTransferDone   = "transfer:done"
-	notifyTransferFailed = "transfer:failed"
-	notifyOfflineDone    = "offline:done"
-	notifyOfflineFailed  = "offline:failed"
+	// notifyCollapseLimit is the maximum number of unacknowledged notifications
+	// shown individually before collapsing into a single summary alert.
+	notifyCollapseLimit = 3
+	notifyItemPrefix    = "notify:item:"
+	notifySummaryID     = "transfer:summary"
 )
+
+type notifyEntry struct {
+	title string
+	ok    bool
+}
 
 // notifyGuide enables the first-launch notification permission sheet. Tests
 // that do not mean to exercise it leave it false (see startWith).
@@ -27,10 +36,65 @@ func (a *App) bindNotifications() {
 	a.cx.OnNotificationPress(a.onNotifyPress)
 }
 
-// onNotifyPress opens Transfers for transfer:* and offline:* notification IDs.
+// onNotifyPress clears active notification tracking and opens Transfers.
 func (a *App) onNotifyPress(id string) {
+	a.clearNotificationBatch()
 	a.selectTab(tabTransfers)
 	_ = id
+}
+
+func (a *App) clearNotificationBatch() {
+	for _, id := range a.notifyShown {
+		a.cx.CloseNotification(id)
+	}
+	a.cx.CloseNotification(notifySummaryID)
+	a.notifyShown = nil
+	a.notifyCount = 0
+	a.notifyOK = 0
+	a.notifyFail = 0
+}
+
+// emitNotifications posts individual alerts while at most notifyCollapseLimit
+// are pending, and collapses them into a single summary alert once exceeded.
+func (a *App) emitNotifications(entries []notifyEntry) {
+	if !a.prefs.GetUntracked().NotifyMaster() || len(entries) == 0 {
+		return
+	}
+	for _, e := range entries {
+		a.notifyCount++
+		if e.ok {
+			a.notifyOK++
+		} else {
+			a.notifyFail++
+		}
+	}
+	if a.notifyCount <= notifyCollapseLimit {
+		for _, e := range entries {
+			a.notifySeq++
+			id := fmt.Sprintf("%s%d", notifyItemPrefix, a.notifySeq)
+			a.notifyShown = append(a.notifyShown, id)
+			_ = a.cx.ShowNotification(core.Notification{
+				ID: id, Title: e.title, Body: locales.NotifyOpenTransfers(a.cx),
+			}, nil)
+		}
+		return
+	}
+	for _, id := range a.notifyShown {
+		a.cx.CloseNotification(id)
+	}
+	a.notifyShown = nil
+	var title string
+	switch {
+	case a.notifyOK > 0 && a.notifyFail > 0:
+		title = locales.NotifySummaryMixed(a.cx, a.notifyCount, strconv.Itoa(a.notifyOK), strconv.Itoa(a.notifyFail))
+	case a.notifyFail > 0:
+		title = locales.NotifySummaryFailed(a.cx, a.notifyFail)
+	default:
+		title = locales.NotifySummaryDone(a.cx, a.notifyOK)
+	}
+	_ = a.cx.ShowNotification(core.Notification{
+		ID: notifySummaryID, Title: title, Body: locales.NotifySummaryCollapsedBody(a.cx),
+	}, nil)
 }
 
 // guideNotifyPermission asks for notification permission once after install /
@@ -60,7 +124,13 @@ func (a *App) markNotifyAsked() {
 func (a *App) requestNotifyPermission(done func(core.NotificationPermission)) {
 	a.cx.RequestNotificationPermission(func(perm core.NotificationPermission) {
 		a.cx.Post(func() {
-			a.markNotifyAsked()
+			a.savePrefs(func(p *store.Prefs) {
+				p.EnsureNotifyPrefs()
+				n := p.Notifications
+				n.Asked = true
+				n.Requested = true
+				p.Notifications = n
+			})
 			if done != nil {
 				done(perm)
 			}
@@ -68,14 +138,13 @@ func (a *App) requestNotifyPermission(done func(core.NotificationPermission)) {
 	})
 }
 
-// notifyTaskOutcomes shows merged system notifications for tasks that newly
-// reached Done or Failed, and updates badge / Dock progress.
+// notifyTaskOutcomes shows notifications for tasks that newly reached Done or
+// Failed, collapsing when too many accumulate, and updates badge / Dock progress.
 func (a *App) notifyTaskOutcomes(snap []transfer.Task) {
-	prefs := a.prefs.GetUntracked()
 	if a.taskStatus == nil {
 		a.taskStatus = map[string]transfer.Status{}
 	}
-	var doneDL, doneUL, failed int
+	var entries []notifyEntry
 	for _, t := range snap {
 		prev, seen := a.taskStatus[t.ID]
 		a.taskStatus[t.ID] = t.Status
@@ -85,11 +154,11 @@ func (a *App) notifyTaskOutcomes(snap []transfer.Task) {
 		becameFailed := t.Status == transfer.Failed && (!seen || prev != transfer.Failed)
 		switch {
 		case becameDone && t.Direction == transfer.Download:
-			doneDL++
+			entries = append(entries, notifyEntry{title: locales.NotifyItemDownloadDone(a.cx, t.Name), ok: true})
 		case becameDone:
-			doneUL++
+			entries = append(entries, notifyEntry{title: locales.NotifyItemUploadDone(a.cx, t.Name), ok: true})
 		case becameFailed:
-			failed++
+			entries = append(entries, notifyEntry{title: locales.NotifyItemTransferFailed(a.cx, t.Name), ok: false})
 		}
 	}
 	// Drop statuses for removed tasks.
@@ -103,85 +172,51 @@ func (a *App) notifyTaskOutcomes(snap []transfer.Task) {
 		}
 	}
 
-	if prefs.NotifyMaster() {
-		if prefs.NotifySuccess() && (doneDL > 0 || doneUL > 0) {
-			a.showMergedTransferDone(doneDL, doneUL)
-		}
-		if prefs.NotifyFailure() && failed > 0 {
-			a.showMergedTransferFailed(failed)
-		}
-	}
+	a.emitNotifications(entries)
 	a.updateBadgeAndProgress(snap)
 }
 
-// showMergedTransferDone replaces the transfer:done notification.
-func (a *App) showMergedTransferDone(downloads, uploads int) {
-	var title string
-	switch {
-	case downloads > 0 && uploads > 0:
-		title = locales.NotifyTransferBoth(a.cx, downloads+uploads)
-	case downloads > 0:
-		title = locales.NotifyDownloadDone(a.cx, downloads)
-	default:
-		title = locales.NotifyUploadDone(a.cx, uploads)
+func offlineSeenKey(siteID string, t openlist.OfflineTask) string {
+	kind := "d"
+	if t.Transfer {
+		kind = "t"
 	}
-	_ = a.cx.ShowNotification(core.Notification{
-		ID: notifyTransferDone, Title: title, Body: locales.NotifyOpenTransfers(a.cx),
-	}, nil)
+	return siteID + "|" + kind + "|" + t.ID
 }
 
-// showMergedTransferFailed replaces the transfer:failed notification.
-func (a *App) showMergedTransferFailed(n int) {
-	_ = a.cx.ShowNotification(core.Notification{
-		ID: notifyTransferFailed, Title: locales.NotifyTransferFailed(a.cx, n), Body: locales.NotifyOpenTransfers(a.cx),
-	}, nil)
-}
-
-// notifyOfflineOutcomes notifies for offline tasks that newly finished.
-func (a *App) notifyOfflineOutcomes(list []openlist.OfflineTask) {
-	prefs := a.prefs.GetUntracked()
+// notifyOfflineOutcomes notifies for offline tasks that newly finished or failed.
+func (a *App) notifyOfflineOutcomes(siteID string, list []openlist.OfflineTask, baselineReady bool) {
 	if a.offlineSeen == nil {
 		a.offlineSeen = map[string]int{}
 	}
-	var done, failed int
+	var entries []notifyEntry
+	alive := make(map[string]bool, len(list))
 	for _, t := range list {
-		prev, seen := a.offlineSeen[t.ID]
-		a.offlineSeen[t.ID] = t.State
+		key := offlineSeenKey(siteID, t)
+		alive[key] = true
+		prev, seen := a.offlineSeen[key]
+		a.offlineSeen[key] = t.State
 		if !seen {
-			// First sight of an already-finished task: do not notify (stale).
+			if !baselineReady || !t.Finished() {
+				continue
+			}
+		} else if prev == t.State || !t.Finished() {
 			continue
 		}
-		if prev == t.State || !t.Finished() {
-			continue
-		}
+		name := offlineTaskName(t.Name)
 		if t.Failed() {
-			failed++
+			entries = append(entries, notifyEntry{title: locales.NotifyItemOfflineFailed(a.cx, name), ok: false})
 		} else if t.State == openlist.TaskSucceeded {
-			done++
+			entries = append(entries, notifyEntry{title: locales.NotifyItemOfflineDone(a.cx, name), ok: true})
 		}
 	}
-	alive := map[string]bool{}
-	for _, t := range list {
-		alive[t.ID] = true
-	}
+	prefix := siteID + "|"
 	for id := range a.offlineSeen {
-		if !alive[id] {
+		if strings.HasPrefix(id, prefix) && !alive[id] {
 			delete(a.offlineSeen, id)
 		}
 	}
-	if !prefs.NotifyMaster() {
-		return
-	}
-	if prefs.NotifySuccess() && done > 0 {
-		_ = a.cx.ShowNotification(core.Notification{
-			ID: notifyOfflineDone, Title: locales.NotifyOfflineDone(a.cx, done), Body: locales.NotifyOpenTransfers(a.cx),
-		}, nil)
-	}
-	if prefs.NotifyFailure() && failed > 0 {
-		_ = a.cx.ShowNotification(core.Notification{
-			ID: notifyOfflineFailed, Title: locales.NotifyOfflineFailed(a.cx, failed), Body: locales.NotifyOpenTransfers(a.cx),
-		}, nil)
-	}
+	a.emitNotifications(entries)
 }
 
 // updateBadgeAndProgress sets the icon badge (active+failed) and Dock progress.
@@ -225,7 +260,7 @@ func (a *App) saveNotifyToggle(change func(*store.NotifyPrefs)) {
 		change(&n)
 		p.Notifications = n
 	})
-	if a.prefs.GetUntracked().NotifyMaster() && !a.prefs.GetUntracked().Notifications.Asked {
+	if a.prefs.GetUntracked().NotifyMaster() && !a.prefs.GetUntracked().Notifications.Requested {
 		a.requestNotifyPermission(func(perm core.NotificationPermission) {
 			if perm == core.NotificationsDenied {
 				a.raise([]accessIssue{{Kind: access.Notifications, Detail: "denied"}})

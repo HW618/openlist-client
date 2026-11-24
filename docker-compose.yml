@@ -1,0 +1,14 @@
+# docker-compose.yml
+services:
+  openlist:
+    image: 'openlistteam/openlist:latest-aria2'
+    container_name: openlist
+    user: '0:0' # Please replace `0:0` with the actual user ID and group ID you want to use to run OpenList.
+    volumes:
+      - './data:/opt/openlist/data'
+    ports:
+      - '5244:5244'
+    environment:
+      - UMASK=022
+      - OPENLIST_ADMIN_PASSWORD=000000
+    restart: unless-stopped

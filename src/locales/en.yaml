@@ -236,20 +236,17 @@ groupAppearance: Appearance and browsing
 groupNotifications: Notifications
 groupPaths: Folders and downloads
 groupAbout: Storage and about
-notifyMaster: Task completion notifications
-notifyMasterDesc: System alerts when uploads, downloads or offline tasks finish or fail
-notifySuccess: Notify on success
-notifySuccessDesc: Alert when a task completes; several are merged into one
-notifyFailure: Notify on failure
-notifyFailureDesc: Alert when a task fails
-notifyLimitsTitle: Platform limits
-notifyLimitsDesc: If the system kills the app, transfers stop and there is no notification. Offline downloads finished on the server while the app is not running also produce none. Linux and the web only show notifications from this run. On Windows, tapping a notification needs an installed build.
-notifyDownloadDone: "{count, plural, one {# file downloaded} other {# files downloaded}}"
-notifyUploadDone: "{count, plural, one {# file uploaded} other {# files uploaded}}"
-notifyTransferBoth: "{count, plural, one {# transfer finished} other {# transfers finished}}"
-notifyTransferFailed: "{count, plural, one {# transfer failed} other {# transfers failed}}"
-notifyOfflineDone: "{count, plural, one {# offline download finished} other {# offline downloads finished}}"
-notifyOfflineFailed: "{count, plural, one {# offline download failed} other {# offline downloads failed}}"
+notifyMaster: Enable notifications
+notifyMasterDesc: System alerts when uploads, downloads or offline tasks succeed or fail; many alerts collapse into one
+notifyItemDownloadDone: "Downloaded: {name}"
+notifyItemUploadDone: "Uploaded: {name}"
+notifyItemTransferFailed: "Transfer failed: {name}"
+notifyItemOfflineDone: "Offline done: {name}"
+notifyItemOfflineFailed: "Offline failed: {name}"
+notifySummaryDone: "{count, plural, one {# task completed} other {# tasks completed}}"
+notifySummaryFailed: "{count, plural, one {# task failed} other {# tasks failed}}"
+notifySummaryMixed: "{total, plural, one {# task finished} other {# tasks finished}} ({ok} done, {fail} failed)"
+notifySummaryCollapsedBody: Too many alerts collapsed. Tap to open Transfers
 notifyOpenTransfers: Tap to open Transfers
 siteLatency: "{latency}"
 siteLatencyLine: "{url} · latency {latency}"
