@@ -51,6 +51,46 @@ func TestPrefsFix(t *testing.T) {
 	}
 }
 
+func TestNotifyPrefsDefaultOn(t *testing.T) {
+	p := DefaultPrefs()
+	if !p.NotifyMaster() || !p.NotifySuccess() || !p.NotifyFailure() {
+		t.Fatalf("unset prefs should default notifications on: %+v", p.Notifications)
+	}
+	p.EnsureNotifyPrefs()
+	if !p.Notifications.Set || !p.Notifications.Master {
+		t.Fatalf("EnsureNotifyPrefs = %+v", p.Notifications)
+	}
+	p.Notifications.Master = false
+	if p.NotifyMaster() {
+		t.Fatal("master off should stick")
+	}
+	// Success/failure can be turned off independently once Set.
+	p.Notifications.Master = true
+	p.Notifications.Success = false
+	p.Notifications.Failure = false
+	if p.NotifySuccess() || p.NotifyFailure() {
+		t.Fatal("success/failure off should stick")
+	}
+}
+
+func TestDesktopPrefsCloseToTrayDefaultOn(t *testing.T) {
+	if !DefaultPrefs().CloseToTray() {
+		t.Fatal("DefaultPrefs().CloseToTray() should default to true")
+	}
+	var zero Prefs
+	if !zero.CloseToTray() {
+		t.Fatal("zero Prefs.CloseToTray() should default to true")
+	}
+	p := Prefs{Desktop: DesktopPrefs{Set: true, CloseToTray: false}}
+	if p.CloseToTray() {
+		t.Fatal("explicit CloseToTray=false should return false")
+	}
+	p.Desktop.CloseToTray = true
+	if !p.CloseToTray() {
+		t.Fatal("explicit CloseToTray=true should return true")
+	}
+}
+
 func TestFileSecrets(t *testing.T) {
 	dir := t.TempDir()
 	s := &FileSecrets{Dir: filepath.Join(dir, "sub")}

@@ -63,3 +63,105 @@ func TestDownloadDirIsTheChosenFolderElseTheSystems(t *testing.T) {
 		t.Fatalf("ask: got %q, want %q", got, def)
 	}
 }
+
+func TestRelocateIOSContainerPath(t *testing.T) {
+	const (
+		oldUUID = "11111111-1111-1111-1111-111111111111"
+		newUUID = "22222222-2222-2222-2222-222222222222"
+		dev1    = "AAAAAAAA-AAAA-AAAA-AAAA-AAAAAAAAAAAA"
+		dev2    = "BBBBBBBB-BBBB-BBBB-BBBB-BBBBBBBBBBBB"
+	)
+	deviceHome := "/var/mobile/Containers/Data/Application/" + newUUID
+	simHome := "/Users/dev/Library/Developer/CoreSimulator/Devices/" + dev1 + "/data/Containers/Data/Application/" + newUUID
+
+	cases := []struct {
+		name        string
+		saved       string
+		currentHome string
+		want        string
+	}{
+		{
+			name:        "real device UUID change",
+			saved:       "/var/mobile/Containers/Data/Application/" + oldUUID + "/Documents/OpenList",
+			currentHome: deviceHome,
+			want:        deviceHome + "/Documents/OpenList",
+		},
+		{
+			name:        "private var prefix on saved",
+			saved:       "/private/var/mobile/Containers/Data/Application/" + oldUUID + "/Documents/OpenList",
+			currentHome: deviceHome,
+			want:        deviceHome + "/Documents/OpenList",
+		},
+		{
+			name:        "private var prefix on currentHome",
+			saved:       "/var/mobile/Containers/Data/Application/" + oldUUID + "/Documents/OpenList",
+			currentHome: "/private" + deviceHome,
+			want:        "/private" + deviceHome + "/Documents/OpenList",
+		},
+		{
+			name:        "same UUID unchanged",
+			saved:       deviceHome + "/Documents/OpenList",
+			currentHome: deviceHome,
+			want:        deviceHome + "/Documents/OpenList",
+		},
+		{
+			name:        "container root without subpath",
+			saved:       "/var/mobile/Containers/Data/Application/" + oldUUID,
+			currentHome: deviceHome,
+			want:        deviceHome,
+		},
+		{
+			name:        "simulator same device UUID change",
+			saved:       "/Users/dev/Library/Developer/CoreSimulator/Devices/" + dev1 + "/data/Containers/Data/Application/" + oldUUID + "/Documents/OpenList",
+			currentHome: simHome,
+			want:        simHome + "/Documents/OpenList",
+		},
+		{
+			name:        "simulator different device not rewritten",
+			saved:       "/Users/dev/Library/Developer/CoreSimulator/Devices/" + dev2 + "/data/Containers/Data/Application/" + oldUUID + "/Documents/OpenList",
+			currentHome: simHome,
+			want:        "/Users/dev/Library/Developer/CoreSimulator/Devices/" + dev2 + "/data/Containers/Data/Application/" + oldUUID + "/Documents/OpenList",
+		},
+		{
+			name:        "desktop path unchanged",
+			saved:       "/Users/u/Downloads/OpenList",
+			currentHome: deviceHome,
+			want:        "/Users/u/Downloads/OpenList",
+		},
+		{
+			name:        "windows path unchanged",
+			saved:       `C:\Users\u\Downloads\OpenList`,
+			currentHome: deviceHome,
+			want:        `C:\Users\u\Downloads\OpenList`,
+		},
+		{
+			name:        "ask sentinel unchanged",
+			saved:       localDirAsk,
+			currentHome: deviceHome,
+			want:        localDirAsk,
+		},
+		{
+			name:        "mem upload key unchanged",
+			saved:       "mem:0",
+			currentHome: deviceHome,
+			want:        "mem:0",
+		},
+		{
+			name:        "empty path unchanged",
+			saved:       "",
+			currentHome: deviceHome,
+			want:        "",
+		},
+		{
+			name:        "invalid UUID not rewritten",
+			saved:       "/var/mobile/Containers/Data/Application/not-a-uuid/Documents/OpenList",
+			currentHome: deviceHome,
+			want:        "/var/mobile/Containers/Data/Application/not-a-uuid/Documents/OpenList",
+		},
+	}
+	for _, tc := range cases {
+		if got := relocateIOSContainerPath(tc.saved, tc.currentHome); got != tc.want {
+			t.Errorf("%s: got %q, want %q", tc.name, got, tc.want)
+		}
+	}
+}

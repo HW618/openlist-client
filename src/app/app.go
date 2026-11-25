@@ -5,6 +5,7 @@ package app
 import (
 	"github.com/nsgo-dev/nsgo/base"
 	"github.com/nsgo-dev/nsgo/core"
+	"github.com/nsgo-dev/nsgo/desktop"
 	"github.com/nsgo-dev/nsgo/icons/lucide"
 	"github.com/nsgo-dev/nsgo/ui"
 
@@ -13,19 +14,60 @@ import (
 	"github.com/HW618/openlist-client/src/theme"
 )
 
+// Run starts the app in NSGo's app scope, setting up the desktop tray and
+// close-to-tray behavior where desktop windows are supported.
+func Run(appScope *core.Scope, setMain func(*core.Scope, func(*core.Scope) core.Node)) {
+	runWith(appScope, nil, setMain)
+}
+
+func runWith(appScope *core.Scope, secrets store.Secrets, setMain func(*core.Scope, func(*core.Scope) core.Node)) {
+	if setMain == nil {
+		setMain = (*core.Scope).SetMainView
+	}
+	var current *App
+	var attach func(*App, *core.Scope)
+	if desktop.IsAvailable(appScope) {
+		attach = setupDesktopApp(appScope, func() *App { return current })
+	}
+	setMain(appScope, func(cx *core.Scope) core.Node {
+		sec := secrets
+		if sec == nil {
+			sec = newSecrets(cx)
+		}
+		node, a := buildRoot(cx, sec)
+		current = a
+		if attach != nil {
+			attach(a, cx)
+		}
+		return node
+	})
+}
+
 // Root is the app's window: three tabs, the panels over them, the preview and
 // the toasts.
 func Root(cx *core.Scope) core.Node { return rootWith(cx, newSecrets(cx)) }
 
 // rootWith is Root with the place tokens are kept given, for tests.
 func rootWith(cx *core.Scope, secrets store.Secrets) core.Node {
+	node, _ := buildRoot(cx, secrets)
+	return node
+}
+
+func buildRoot(cx *core.Scope, secrets store.Secrets) (core.Node, *App) {
 	cx.SetTheme(theme.Load())
 	bars := ui.ScrollbarTheme(cx)
 	bars.Mode = base.ScrollbarAlways
 	base.SetScrollbarTheme(cx, bars)
 	app := newApp(cx, secrets)
 	if startupChecks {
-		cx.Post(func() { app.checkAccess(false) })
+		cx.Post(func() {
+			// Guide notifications before other access checks so the Allow
+			// button is a clear first-launch step (and a user gesture on web).
+			if notifyGuide {
+				app.guideNotifyPermission()
+			}
+			app.checkAccess(false)
+		})
 	}
 	th := theme.Of(cx)
 	return core.View{
@@ -37,7 +79,7 @@ func rootWith(cx *core.Scope, secrets store.Secrets) core.Node {
 			app.sheetHost(cx),
 			ui.Toasts{Toaster: app.toaster, Placement: ui.ToastBottom, Inset: 84, CloseLabel: locales.CloseSheetLabel(cx), TestID: "toasts"},
 		},
-	}
+	}, app
 }
 
 // tabEntry is one tab of the bar.

@@ -1,10 +1,19 @@
 name: openlist-client
-id: dev.nsgo.openlistclient
-version: 0.1.0
+# App ID is also the Secrets service name, Android package name and iOS Bundle ID.
+# Tokens under the previous ID (dev.nsgo.openlistclient) are migrated on launch.
+id: io.github.hw618.openlistclient
+version: 0.2.0
 
 # The language catalogs, relative to this file.
 i18n:
   dir: src/locales
+
+# Custom URL scheme for deep links (e.g. tapping a mobile Live Activity / Live Update).
+url_schemes: [openlist]
+
+# Mobile Live Activities (iOS Lock Screen / Dynamic Island, Android Live Updates / ongoing progress).
+live_activities:
+  enabled: true
 
 # macOS and iOS use an .icon or, on macOS, an .icns; the other targets, and
 # Apple ones without those, use a square PNG. Ours live in design/icon. An Apple
@@ -30,7 +39,18 @@ dev:
 android:
   # Saving in the shared Download folders, and not only through the save dialog,
   # needs the user to allow "All files access" for the app in System settings.
-  permissions: [MANAGE_EXTERNAL_STORAGE, WRITE_EXTERNAL_STORAGE]
+  # POST_NOTIFICATIONS (Android 13+) is required for task completion notifications
+  # and transfer progress notifications.
+  permissions: [MANAGE_EXTERNAL_STORAGE, WRITE_EXTERNAL_STORAGE, POST_NOTIFICATIONS]
+
+# Android release signing (ROADMAP §0). Do not put passwords in this file.
+# Release CI writes the keystore from GitHub Secrets and passes -keystore /
+# -key-alias; see .github/workflows/release.yml and README "Releases".
+# Local example (after you generate a keystore; never commit it):
+# sign:
+#   keystore: .nsgo/android-release.p12
+#   key_alias: openlist
+# Passwords: export NSGO_KEYSTORE_PASSWORD=... NSGO_KEY_PASSWORD=...
 
 build:
   output: dist

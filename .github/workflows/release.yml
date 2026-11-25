@@ -1,7 +1,7 @@
 name: Release
 
 # Builds the clients when a release is published, and adds them to it.
-# Tag the release v<version>, the version in nsgo.yaml: v0.1.0 for version 0.1.0.
+# Tag the release v<version>, the version in nsgo.yaml: v0.2.0 for version 0.2.0.
 on:
   release:
     types: [published]
@@ -55,8 +55,37 @@ jobs:
           $sudo apt-get update
           $sudo apt-get install -y nsis
 
+      # Android release signing: when the secrets below are set, write the keystore
+      # and pass -keystore / -key-alias. Without them the APK keeps the debug key.
+      # Secrets checklist (repository Settings → Secrets and variables → Actions):
+      #   ANDROID_KEYSTORE_BASE64  — base64 of the PKCS#12 (.p12) or JKS keystore
+      #   NSGO_KEYSTORE_PASSWORD   — keystore password (NSGo reads this env name)
+      #   NSGO_KEY_PASSWORD        — key password (often the same as the keystore)
+      #   ANDROID_KEY_ALIAS        — optional; defaults to openlist
+      # Never commit the keystore or passwords; *.p12 / *.jks are gitignored.
+      - name: Android release keystore
+        id: android_sign
+        if: matrix.target == 'android_arm64' && secrets.ANDROID_KEYSTORE_BASE64 != ''
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          mkdir -p .nsgo
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 -d > .nsgo/android-release.p12
+          alias="${ANDROID_KEY_ALIAS:-openlist}"
+          echo "keystore=.nsgo/android-release.p12" >> "$GITHUB_OUTPUT"
+          echo "alias=$alias" >> "$GITHUB_OUTPUT"
+
       - name: Build
-        run: go tool nsgo build -target ${{ matrix.target }}
+        env:
+          NSGO_KEYSTORE_PASSWORD: ${{ secrets.NSGO_KEYSTORE_PASSWORD }}
+          NSGO_KEY_PASSWORD: ${{ secrets.NSGO_KEY_PASSWORD }}
+        run: |
+          extra=()
+          if [ -n "${{ steps.android_sign.outputs.keystore }}" ]; then
+            extra+=(-keystore "${{ steps.android_sign.outputs.keystore }}" -key-alias "${{ steps.android_sign.outputs.alias }}")
+          fi
+          go tool nsgo build -target ${{ matrix.target }} "${extra[@]}"
 
       - name: Add the packages to the release
         run: |

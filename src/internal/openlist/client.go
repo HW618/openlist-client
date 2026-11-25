@@ -141,11 +141,13 @@ type envelope struct {
 	Data    json.RawMessage `json:"data"`
 }
 
+var defaultHTTP = &http.Client{CheckRedirect: CheckRedirect}
+
 func (c *Client) http() *http.Client {
 	if c.HTTP != nil {
 		return c.HTTP
 	}
-	return http.DefaultClient
+	return defaultHTTP
 }
 
 // URL joins an API path to the server's address.
@@ -261,12 +263,43 @@ func (c *Client) Get(ctx context.Context, p string) (Object, error) {
 	return out, err
 }
 
-// Absolute makes a server-relative address absolute.
+// CheckRedirect enforces the token safety rule across HTTP redirects: it
+// rejects non-HTTP(S) targets and strips Authorization whenever a redirect
+// changes hosts or downgrades from HTTPS to HTTP.
+func CheckRedirect(req *http.Request, via []*http.Request) error {
+	if len(via) >= 10 {
+		return errors.New("stopped after 10 redirects")
+	}
+	if !strings.EqualFold(req.URL.Scheme, "http") && !strings.EqualFold(req.URL.Scheme, "https") {
+		return fmt.Errorf("openlist: unsupported redirect scheme %q", req.URL.Scheme)
+	}
+	for _, prev := range via {
+		if strings.EqualFold(prev.URL.Scheme, "https") && !strings.EqualFold(req.URL.Scheme, "https") {
+			req.Header.Del("Authorization")
+			break
+		}
+		if !strings.EqualFold(prev.URL.Host, req.URL.Host) {
+			req.Header.Del("Authorization")
+			break
+		}
+	}
+	return nil
+}
+
+// Absolute makes a server-relative address absolute, rejecting non-HTTP(S) schemes.
 func (c *Client) Absolute(u string) string {
-	if u == "" || strings.Contains(u, "://") {
-		return u
+	if u == "" {
+		return ""
 	}
 	if !strings.HasPrefix(u, "/") {
+		if parsed, err := url.Parse(u); err != nil {
+			return ""
+		} else if parsed.Scheme != "" {
+			if !strings.EqualFold(parsed.Scheme, "http") && !strings.EqualFold(parsed.Scheme, "https") {
+				return ""
+			}
+			return u
+		}
 		u = "/" + u
 	}
 	return c.URL(u)

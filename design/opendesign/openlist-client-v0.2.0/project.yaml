@@ -1,0 +1,6 @@
+# OpenDesign reusable project metadata for openlist-client prototypes
+id: openlist-client-v0.2.0
+name: OpenList Client v0.2.0
+design_system: apple
+entry_file: index.html
+prototype_export: ../../prototype/index-v0.2.0.html

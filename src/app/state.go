@@ -10,10 +10,13 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/nsgo-dev/nsgo/core"
+	"github.com/nsgo-dev/nsgo/desktop"
 	"github.com/nsgo-dev/nsgo/ui"
+	"github.com/nsgo-dev/nsgo/widget"
 
 	"github.com/HW618/openlist-client/src/internal/access"
 	"github.com/HW618/openlist-client/src/internal/browse"
@@ -49,6 +52,7 @@ const (
 	sheetRename
 	sheetPermission
 	sheetLocalDir
+	sheetQuitConfirm
 )
 
 // pickerSpec is a request to choose a folder on the server.
@@ -63,8 +67,12 @@ type pickerSpec struct {
 	ConfirmText string
 	// Exclude is a folder that cannot be chosen, where a move starts.
 	Exclude string
+	// ExcludeTrees are folder paths that cannot be chosen (nor their descendants).
+	ExcludeTrees []string
 	// Confirm hears the chosen folder.
 	Confirm func(dir string)
+	// ConfirmWith hears the chosen folder and a completion callback for busy state.
+	ConfirmWith func(dir string, done func(error))
 	// Back is the panel to return to when the picker is left.
 	Back sheetState
 }
@@ -123,6 +131,19 @@ type previewData struct {
 	Large  bool
 }
 
+// transferBannerState is the inline notice shown inside the Transfers page.
+type transferBannerState struct {
+	Visible      bool
+	Ongoing      bool
+	Heading      string
+	Status       string
+	Title        string
+	Body         string
+	// Progress is 0–100 for ui.Progress (not the Live Activity 0–1 fraction).
+	Progress     float32
+	ShowProgress bool
+}
+
 // siteStatus is what the last test of a site found.
 type siteStatus struct {
 	Checking bool
@@ -153,7 +174,7 @@ const (
 )
 
 // apiHTTP is the client API calls go through: calls end instead of hanging.
-var apiHTTP = &http.Client{Timeout: 30 * time.Second}
+var apiHTTP = &http.Client{Timeout: 30 * time.Second, CheckRedirect: openlist.CheckRedirect}
 
 // App is the state of the whole app.
 type App struct {
@@ -211,11 +232,13 @@ type App struct {
 	fabStart browse.Pos
 
 	// Transfers.
-	engine     *transfer.Engine
-	tasks      *core.Signal[[]transfer.Task]
-	filter     *core.Signal[string]
-	offline    *core.Signal[offlineState]
-	webFolders *core.Signal[map[string]string]
+	engine             *transfer.Engine
+	tasks              *core.Signal[[]transfer.Task]
+	transferBanner     *core.Signal[transferBannerState]
+	bannerDismissedSig string
+	filter             *core.Signal[string]
+	offline            *core.Signal[offlineState]
+	webFolders         *core.Signal[map[string]string]
 	probeDir   func(string) error
 	// canWrite is whether the folder of the current site takes files, as the
 	// last look at it found, where Android tells it in settings.
@@ -227,29 +250,73 @@ type App struct {
 	// folders wait for, so that a site is not asked for before the app has
 	// the account to ask as.
 	ready *core.Signal[bool]
+	// readyCh is closed once preloadTokens finishes (or immediately when no
+	// vault is used), so background goroutines can wait for tokens without
+	// touching signals.
+	readyCh chan struct{}
 	// vault is the secure store of the tokens, nil where tests give another.
 	vault *vault
 	// keychainTold is whether the user was told this run of a secure store
 	// the platform lacks.
 	keychainTold bool
-	notified     map[string]bool
-	offlineBusy  bool
-	polling      bool
-	lastSig      string
-	lastDone     int
-	uploadMu     sync.Mutex
-	uploadFile   map[string]core.File
-	uploadSeen   map[string]bool // keys of uploads the task list has shown; the engine goroutine's
+	notified      map[string]bool
+	offlineBusy   bool
+	polling       bool
+	lastSig       string
+	lastDone      int
+	lastSavedDone int64
+	lastTaskSave  time.Time
+	uploadMu      sync.Mutex
+	uploadFile    map[string]core.File
+	uploadSeen    map[string]bool // keys of uploads the task list has shown; the engine goroutine's
+	wakeMu        sync.Mutex
+	wakeCh        chan struct{}
+	resumeMu      sync.Mutex
+	resumableFail map[string]bool
+	inBackground  atomic.Bool
+	// taskStatus and offlineSeen track prior statuses so Done/Failed notify once.
+	taskStatus           map[string]transfer.Status
+	offlineSeen          map[string]int
+	notifyCount          int
+	notifyOK             int
+	notifyFail           int
+	notifySeq            int
+	notifyShown          []string
+	notifyItemKeys       map[string]bool // active notification item key -> ok
+	notifySummaryShown   bool
+	notifyPermChecking   bool
+	progressAct          *widget.Activity
+	progressUnsupported  bool
+	progressPermSyncAt   time.Time
+	progressSig          string
+	progressDismissedSig string
+	progressLastKey      string
+	progressLastPct      int
+	progressLastAt       time.Time
+	progressTimerPending bool
+	progressNotifyShown  bool
+	progressNotifySig    string
+	progressNotifyKey    string
+	progressNotifyPct    int
+	progressNotifyAt     time.Time
+	progressNotifyTimer  bool
+	releaseAwake         func()
+
+	// Desktop tray and window lifecycle.
+	appScope    *core.Scope
+	mainWin     *desktop.Window
+	tray        *desktop.Tray
+	pendingQuit func(bool)
 
 	// Settings.
 	status       *core.Signal[map[string]siteStatus]
 	sitesOpen    *core.Signal[bool]
 	cacheVersion *core.Signal[int]
 
-	mu       sync.Mutex
-	clients  map[string]*openlist.Client
-	cache    map[string]listResult
-	cacheLen int
+	mu         sync.Mutex
+	clients    map[string]*openlist.Client
+	cache      map[string]listResult
+	cacheOrder []string
 }
 
 // sigAlways is a signal that tells its readers on every write, for values
@@ -261,7 +328,8 @@ func sigAlways[T any](cx *core.Scope, v T) *core.Signal[T] {
 // newApp builds the state in cx, which is the root scope.
 func newApp(cx *core.Scope, secrets store.Secrets) *App {
 	a := &App{cx: cx, secrets: secrets, clients: map[string]*openlist.Client{}, cache: map[string]listResult{},
-		uploadFile: map[string]core.File{}, uploadSeen: map[string]bool{}, toaster: ui.NewToaster(cx)}
+		uploadFile: map[string]core.File{}, uploadSeen: map[string]bool{}, toaster: ui.NewToaster(cx),
+		resumableFail: map[string]bool{}, notifyItemKeys: map[string]bool{}}
 
 	a.tab = core.NewSignal(cx, tabFiles)
 
@@ -270,7 +338,20 @@ func newApp(cx *core.Scope, secrets store.Secrets) *App {
 	a.prefStore = core.NewPersisted(cx, "prefs", store.DefaultPrefs(), core.PersistOptions{Version: 1})
 	a.taskStore = core.NewPersisted[[]transfer.Task](cx, "transfers", nil, core.PersistOptions{Version: 1})
 
-	a.sites = sigAlways(cx, a.sitesStore.Get())
+	sites := slices.Clone(a.sitesStore.Get())
+	sitesRelocated := false
+	for i := range sites {
+		if d := sites[i].Settings.LocalDir; d != "" && d != localDirAsk {
+			if moved := relocateSavedPath(d); moved != d {
+				sites[i].Settings.LocalDir = moved
+				sitesRelocated = true
+			}
+		}
+	}
+	if sitesRelocated {
+		_ = a.sitesStore.Set(sites)
+	}
+	a.sites = sigAlways(cx, sites)
 	a.siteID = core.NewSignal(cx, a.idStore.Get())
 	prefs := a.prefStore.Get().Fix()
 	a.prefs = core.NewSignal(cx, prefs)
@@ -319,17 +400,23 @@ func newApp(cx *core.Scope, secrets store.Secrets) *App {
 	a.cacheVersion = core.NewSignal(cx, 0)
 
 	a.tasks = sigAlways(cx, []transfer.Task(nil))
+	a.transferBanner = core.NewSignal(cx, transferBannerState{})
 	a.offline = sigAlways(cx, offlineState{})
 	a.webFolders = sigAlways(cx, map[string]string{})
 	a.probeDir = access.ProbeDir
 	a.canWrite = core.NewSignal(cx, true)
 	a.logins = core.NewSignal(cx, 0)
 	a.ready = core.NewSignal(cx, true)
+	a.readyCh = make(chan struct{})
 	if v, ok := secrets.(*vault); ok {
 		a.vault = v
 		a.preloadTokens()
+	} else {
+		close(a.readyCh)
 	}
 	a.notified = map[string]bool{}
+	a.taskStatus = map[string]transfer.Status{}
+	a.offlineSeen = map[string]int{}
 	if isWeb() {
 		for _, st := range a.sites.GetUntracked() {
 			id := st.ID
@@ -344,9 +431,53 @@ func newApp(cx *core.Scope, secrets store.Secrets) *App {
 	}
 
 	a.buildResources()
-	a.engine = transfer.New(a.runner, a.transfersChanged, a.taskStore.Get())
+	initialTasks := slices.Clone(a.taskStore.Get())
+	tasksRelocated := false
+	var autoResumeDownloads []string
+	for i := range initialTasks {
+		t := &initialTasks[i]
+		if t.LocalPath != "" {
+			if moved := relocateSavedPath(t.LocalPath); moved != t.LocalPath {
+				t.LocalPath = moved
+				tasksRelocated = true
+			}
+		}
+		if t.Direction == transfer.Upload && t.Status != transfer.Done && strings.HasPrefix(t.LocalPath, "mem:") {
+			t.Status = transfer.Failed
+			t.Err = "upload source is no longer available after restart"
+			continue
+		}
+		if t.Direction == transfer.Download && t.Status != transfer.Done {
+			if sz := a.existingPartSize(*t); sz > 0 {
+				if t.Total > 0 && sz > t.Total {
+					sz = t.Total
+				}
+				t.Done = sz
+			}
+			if t.Status == transfer.Active {
+				autoResumeDownloads = append(autoResumeDownloads, t.ID)
+			}
+		}
+	}
+	if tasksRelocated {
+		_ = a.taskStore.Set(initialTasks)
+	}
+	a.engine = transfer.New(a.runner, a.transfersChanged, initialTasks)
 	a.lastDone = -1
 	a.syncTasks()
+	a.bindNotifications()
+	a.bindDeepLinks()
+	a.bindLifecycleAndNetwork()
+	if len(autoResumeDownloads) > 0 {
+		a.cx.Post(func() {
+			for _, id := range autoResumeDownloads {
+				a.engine.Resume(id)
+			}
+		})
+	}
+	if a.prefs.GetUntracked().NotifyMaster() {
+		a.cx.Post(a.pollOffline)
+	}
 	return a
 }
 
@@ -442,6 +573,8 @@ func (a *App) buildResources() {
 		})
 }
 
+const maxDirCache = 128
+
 // fetchDir reads a folder, keeping what it read for the next visit.
 func (a *App) fetchDir(ctx context.Context, r listReq, refresh bool) (listResult, error) {
 	l, err := r.Client.List(ctx, r.Dir, refresh)
@@ -452,8 +585,17 @@ func (a *App) fetchDir(ctx context.Context, r listReq, refresh bool) (listResult
 	for i, e := range l.Entries {
 		res.Items[i] = browse.ItemFrom(r.Dir, e)
 	}
+	key := r.Client.BaseURL + "|" + r.Dir
 	a.mu.Lock()
-	a.cache[r.Client.BaseURL+"|"+r.Dir] = res
+	if _, exists := a.cache[key]; !exists {
+		if len(a.cacheOrder) >= maxDirCache {
+			evict := a.cacheOrder[0]
+			a.cacheOrder = a.cacheOrder[1:]
+			delete(a.cache, evict)
+		}
+		a.cacheOrder = append(a.cacheOrder, key)
+	}
+	a.cache[key] = res
 	a.mu.Unlock()
 	return res, nil
 }
@@ -485,6 +627,7 @@ func (a *App) cacheStats() (folders int, bytes int64) {
 func (a *App) clearCache() {
 	a.mu.Lock()
 	a.cache = map[string]listResult{}
+	a.cacheOrder = nil
 	a.mu.Unlock()
 	a.cacheVersion.Update(func(n int) int { return n + 1 })
 	a.listing.Refetch()
@@ -540,7 +683,7 @@ func (a *App) searchItems(q string) []browse.Item {
 // searchBudget allows, and progress hears what they have shown so far.
 func searchBelow(ctx context.Context, r searchReq, progress func([]browse.Item)) ([]browse.Item, error) {
 	hits, err := r.Client.Search(ctx, r.Dir, r.Query)
-	if err == nil && len(hits) > 0 {
+	if err == nil {
 		items := make([]browse.Item, len(hits))
 		for i, h := range hits {
 			items[i] = browse.ItemFromResult(h)
@@ -670,8 +813,8 @@ func (a *App) switchSite(id string) {
 		a.resetBrowse(s.Settings.FilesPath)
 		a.offline.Set(offlineState{})
 	})
-	if a.tab.GetUntracked() == tabTransfers {
-		a.refreshOffline()
+	if a.tab.GetUntracked() == tabTransfers || a.prefs.GetUntracked().NotifyMaster() {
+		a.pollOffline()
 	}
 }
 
@@ -687,17 +830,47 @@ func (a *App) resetBrowse(dir string) {
 	a.path.Set(openlist.Clean(dir))
 }
 
-// removeSite forgets a site and its token.
+// removeSite forgets a site, its token, cached folders, web handle, and tasks.
 func (a *App) removeSite(id string) {
+	var removedURL string
 	var rest []store.Site
 	for _, s := range a.sites.GetUntracked() {
 		if s.ID != id {
 			rest = append(rest, s)
+		} else {
+			removedURL = s.URL
 		}
 	}
 	_ = a.secrets.Remove(id)
+	if isWeb() {
+		webFolderForget(id)
+		a.webFolders.Update(func(m map[string]string) map[string]string { return withoutKey(m, id) })
+	}
+	for _, t := range a.engine.Snapshot() {
+		if t.SiteID == id {
+			a.removeTask(t)
+		}
+	}
+	a.syncTasks()
+	if removedURL != "" {
+		prefix := removedURL + "|"
+		a.mu.Lock()
+		keptOrder := a.cacheOrder[:0]
+		for _, k := range a.cacheOrder {
+			if strings.HasPrefix(k, prefix) {
+				delete(a.cache, k)
+			} else {
+				keptOrder = append(keptOrder, k)
+			}
+		}
+		a.cacheOrder = keptOrder
+		a.mu.Unlock()
+	}
 	a.logins.Update(func(n int) int { return n + 1 })
 	a.cx.Batch(func() {
+		stMap := maps_status_clone(a.status.GetUntracked())
+		delete(stMap, id)
+		a.status.Set(stMap)
 		a.saveSites(rest)
 		if a.siteID.GetUntracked() == id {
 			next := ""
@@ -706,6 +879,7 @@ func (a *App) removeSite(id string) {
 			}
 			a.siteID.Set(next)
 			_ = a.idStore.Set(next)
+			a.offline.Set(offlineState{})
 			if next != "" {
 				s, _ := a.siteByID(next)
 				a.resetBrowse(s.Settings.FilesPath)
@@ -789,9 +963,17 @@ func (a *App) selectAll(all bool) {
 
 // ---- panels ----
 
-func (a *App) openSheet(s sheetState) { a.sheet.Set(s) }
+func (a *App) openSheet(s sheetState) {
+	if s.Kind != sheetQuitConfirm {
+		a.cancelPendingQuit()
+	}
+	a.sheet.Set(s)
+}
 
-func (a *App) closeSheet() { a.sheet.Set(sheetState{}) }
+func (a *App) closeSheet() {
+	a.cancelPendingQuit()
+	a.sheet.Set(sheetState{})
+}
 
 // toast shows a short message.
 func (a *App) toast(msg string) {
@@ -881,8 +1063,14 @@ func secretsDirIn(env func(string) string, config func() (string, error)) string
 	return ""
 }
 
+// legacySecretService is the Secrets service name used before the app ID was
+// changed to io.github.hw618.openlistclient. Tokens under it are copied into
+// the current service on first read (desktop keychains). Android package
+// changes are a different app, so the old Keystore is not reachable there.
+const legacySecretService = "dev.nsgo.openlistclient"
+
 // newSecrets keeps the tokens in the platform's secure store, and brings in
-// those an earlier version kept in a file.
+// those an earlier version kept in a file, and those under the previous app ID.
 func newSecrets(cx *core.Scope) store.Secrets {
 	if isWeb() {
 		// An earlier version kept them in the page's plain storage.
@@ -893,5 +1081,41 @@ func newSecrets(cx *core.Scope) store.Secrets {
 		f := &store.FileSecrets{Dir: dir}
 		legacy = func() (map[string]string, func()) { return f.All(), f.Wipe }
 	}
-	return newVault(cx.Secrets(), legacy)
+	cur := cx.Secrets()
+	old := cur
+	old.Service = legacySecretService
+	return newVault(migrateSecrets{cur: cur, old: old}, legacy)
+}
+
+// migrateSecrets reads from the current Secrets service, and when an account
+// is missing there, from the previous app ID's service, then copies it over.
+type migrateSecrets struct {
+	cur, old core.Secrets
+}
+
+func (m migrateSecrets) Get(account string) (string, bool, error) {
+	v, ok, err := m.cur.Get(account)
+	if err != nil || ok {
+		return v, ok, err
+	}
+	v, ok, err = m.old.Get(account)
+	if err != nil || !ok || v == "" {
+		return v, ok, err
+	}
+	if err := m.cur.Set(account, v); err != nil {
+		// Still hand the token to the app; a later Set may succeed.
+		return v, true, nil
+	}
+	_ = m.old.Delete(account)
+	return v, true, nil
+}
+
+func (m migrateSecrets) Set(account, value string) error {
+	return m.cur.Set(account, value)
+}
+
+func (m migrateSecrets) Delete(account string) error {
+	err := m.cur.Delete(account)
+	_ = m.old.Delete(account)
+	return err
 }

@@ -30,6 +30,9 @@ const (
 	// Keychain is the system having no secure store to keep the sign-in in,
 	// as a Linux session without a Secret Service.
 	Keychain
+	// Notifications is the system refusing to show notifications, or the
+	// user having denied them.
+	Notifications
 )
 
 // Problem is a failure of permission.

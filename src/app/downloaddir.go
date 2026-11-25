@@ -2,6 +2,7 @@ package app
 
 import (
 	"os"
+	"path"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -115,4 +116,88 @@ func xdgDownloads(home string, env func(string) string, read func(string) ([]byt
 		return expand(strings.Trim(strings.TrimPrefix(line, "XDG_DOWNLOAD_DIR="), `"'`))
 	}
 	return ""
+}
+
+// relocateSavedPath rewrites stale iOS sandbox container paths whose container
+// UUID changed across app upgrades. On other platforms it returns p unchanged.
+var relocateSavedPath = defaultRelocateSavedPath
+
+func defaultRelocateSavedPath(p string) string {
+	if runtime.GOOS != "ios" {
+		return p
+	}
+	home, err := os.UserHomeDir()
+	if err != nil || home == "" {
+		return p
+	}
+	return relocateIOSContainerPath(p, home)
+}
+
+func isUUID(s string) bool {
+	if len(s) != 36 {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		switch i {
+		case 8, 13, 18, 23:
+			if c != '-' {
+				return false
+			}
+		default:
+			if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')) {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+func normalizeIOSPath(p string) string {
+	p = filepath.ToSlash(p)
+	if strings.HasPrefix(p, "/private/var/") {
+		p = strings.TrimPrefix(p, "/private")
+	}
+	return path.Clean(p)
+}
+
+func splitIOSContainer(p string) (prefix, id, tail string, ok bool) {
+	const marker = "/Containers/Data/Application/"
+	norm := normalizeIOSPath(p)
+	idx := strings.Index(norm, marker)
+	if idx < 0 {
+		return "", "", "", false
+	}
+	prefix = norm[:idx]
+	rest := norm[idx+len(marker):]
+	id, tail, _ = strings.Cut(rest, "/")
+	if !isUUID(id) {
+		return "", "", "", false
+	}
+	return prefix, id, tail, true
+}
+
+// relocateIOSContainerPath rewrites saved onto currentHome when both refer to
+// the same iOS app container root (/Containers/Data/Application/<UUID>) and the
+// container UUID changed.
+func relocateIOSContainerPath(saved, currentHome string) string {
+	if saved == "" || currentHome == "" || saved == localDirAsk || strings.HasPrefix(saved, "mem:") {
+		return saved
+	}
+	prefix, id, tail, ok := splitIOSContainer(saved)
+	if !ok {
+		return saved
+	}
+	homePrefix, homeID, homeTail, ok := splitIOSContainer(currentHome)
+	if !ok || homeTail != "" || prefix != homePrefix {
+		return saved
+	}
+	if id == homeID {
+		return saved
+	}
+	cleanHome := path.Clean(filepath.ToSlash(currentHome))
+	if tail == "" {
+		return cleanHome
+	}
+	return path.Join(cleanHome, tail)
 }

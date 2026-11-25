@@ -3,6 +3,7 @@
 package app
 
 import (
+	"context"
 	"errors"
 	"io"
 )
@@ -27,4 +28,6 @@ func (*webFile) Abort()                    {}
 
 var _ io.WriteCloser = (*webFile)(nil)
 
-func webFolderCreate(string, string) (*webFile, error) { return nil, errors.New("not a browser") }
+func webFolderCreate(context.Context, string, string) (*webFile, error) {
+	return nil, errors.New("not a browser")
+}
