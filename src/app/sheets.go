@@ -39,6 +39,7 @@ func (a *App) sheetHost(cx *core.Scope) core.Node {
 		at(sheetRename, a.renameSheet),
 		at(sheetPermission, a.permissionSheet),
 		at(sheetLocalDir, a.localDirSheet),
+		at(sheetQuitConfirm, a.quitConfirmSheet),
 	}}
 }
 
@@ -93,12 +94,17 @@ func (a *App) renameSheet(cx *core.Scope, st sheetState) core.Node {
 	it := st.Item
 	name := core.NewSignal(cx, it.Name)
 	problem := core.NewSignal(cx, "")
+	busy := core.NewSignal(cx, false)
 	submit := func() {
-		if strings.TrimSpace(name.Get()) == "" {
+		if busy.Get() {
+			return
+		}
+		if !validEntryName(name.Get()) {
 			problem.Set(locales.RenameError(cx))
 			return
 		}
-		a.rename(it, name.Get())
+		busy.Set(true)
+		a.rename(it, name.Get(), func(error) { busy.Set(false) })
 	}
 	in := textInput(name, locales.RenameLabel(cx), "", func(in *ui.Input) {
 		in.OnSubmit = func(string) { submit() }
@@ -108,7 +114,7 @@ func (a *App) renameSheet(cx *core.Scope, st sheetState) core.Node {
 	return a.sheetFrame(locales.RenameTitle(cx),
 		[]core.Node{field(cx, locales.RenameLabel(cx), in, problem.Get)},
 		[]core.Node{ui.Button{Text: locales.Cancel(cx), Variant: ui.ButtonSecondary, Flex: 1, OnPress: a.closeSheet},
-			ui.Button{Text: locales.ConfirmRename(cx), Flex: 1, OnPress: submit, TestID: "rename-confirm"}})
+			ui.Button{Text: locales.ConfirmRename(cx), Flex: 1, OnPress: submit, Disabled: busy.Get, TestID: "rename-confirm"}})
 }
 
 func (a *App) deleteSheet(cx *core.Scope, st sheetState) core.Node {
@@ -116,6 +122,7 @@ func (a *App) deleteSheet(cx *core.Scope, st sheetState) core.Node {
 	if len(items) == 0 {
 		items = []browse.Item{st.Item}
 	}
+	busy := core.NewSignal(cx, false)
 	title, body := locales.DeleteBatchTitle(cx), locales.DeleteBatchBody(cx, len(items))
 	if len(items) == 1 {
 		title, body = locales.DeleteTitle(cx), locales.DeleteBody(cx, items[0].Name)
@@ -127,9 +134,16 @@ func (a *App) deleteSheet(cx *core.Scope, st sheetState) core.Node {
 			break
 		}
 	}
+	th := theme.Of(cx)
 	return a.sheetFrame(title, kids,
 		[]core.Node{ui.Button{Text: locales.Cancel(cx), Variant: ui.ButtonSecondary, Flex: 1, OnPress: a.closeSheet},
-			dangerButton(cx, locales.ConfirmDelete(cx), func() { a.remove(items) })})
+			ui.Button{Text: locales.ConfirmDelete(cx), Flex: 1, Color: th.Danger, Disabled: busy.Get, OnPress: func() {
+				if busy.Get() {
+					return
+				}
+				busy.Set(true)
+				a.remove(items, func(error) { busy.Set(false) })
+			}}})
 }
 
 // ---- sites ----
@@ -138,11 +152,12 @@ func (a *App) sitesSheet(cx *core.Scope, _ sheetState) core.Node {
 	th := theme.Of(cx)
 	rows := core.Each(a.sites.Get, func(s store.Site) string { return s.ID },
 		func(cx *core.Scope, site func() store.Site, _ func() int) core.Node {
-			s := site()
-			current := func() bool { return a.siteID.Get() == s.ID }
+			id := site().ID
+			current := func() bool { return a.siteID.Get() == id }
 			return core.View{
-				Role: core.RoleButton, Label: s.Name, Selected: current,
+				Role: core.RoleButton, Label: site().Name, Selected: current,
 				OnPress: func(core.PressEvent) {
+					s := site()
 					if !current() {
 						a.switchSite(s.ID)
 						a.toast(locales.ToastSwitchedSite(cx, s.Name))
@@ -159,15 +174,20 @@ func (a *App) sitesSheet(cx *core.Scope, _ sheetState) core.Node {
 				Children: []core.Node{
 					tile(cx, lucide.Server, "", 36, 10),
 					core.View{Style: fillStyle.Merge(core.Style{Gap: 2}), Children: []core.Node{
-						oneLine(txt(cx, s.Name, theme.TypeBody, cText)), oneLine(txt(cx, s.URL, theme.TypeCaption, cMuted))}},
+						oneLine(txtf(cx, func() string { return site().Name }, theme.TypeBody, cText)),
+						oneLine(txtf(cx, func() string { return site().URL }, theme.TypeCaption, cMuted))}},
 					core.Show{When: current, Then: func(cx *core.Scope) core.Node { return icon(cx, lucide.Check, 18, cAccent) }},
 				},
 			}
 		})
-	return a.sheetFrame(locales.SiteSwitcherTitle(cx),
-		[]core.Node{core.View{Style: core.Style{Gap: 8}, Children: []core.Node{rows}},
-			ui.Button{Text: locales.AddNewSite(cx), Variant: ui.ButtonSecondary, OnPress: func() { a.openSheet(sheetState{Kind: sheetAddSite}) }, TestID: "add-new-site"}},
-		nil)
+	addBtn := ui.Button{
+		Text:    locales.AddNewSite(cx),
+		Variant: ui.ButtonSecondary,
+		OnPress: func() { a.openSheet(sheetState{Kind: sheetAddSite}) },
+		TestID:  "add-new-site",
+	}
+	return a.sheetFrameWithAction(locales.SiteSwitcherTitle(cx), addBtn,
+		[]core.Node{core.View{Style: core.Style{Gap: 8}, Children: []core.Node{rows}}}, nil)
 }
 
 func (a *App) addSiteSheet(cx *core.Scope, _ sheetState) core.Node {
@@ -274,12 +294,17 @@ func (a *App) quickSheet(cx *core.Scope, _ sheetState) core.Node {
 
 func (a *App) mkdirSheet(cx *core.Scope, _ sheetState) core.Node {
 	name, problem := core.NewSignal(cx, ""), core.NewSignal(cx, "")
+	busy := core.NewSignal(cx, false)
 	submit := func() {
-		if strings.TrimSpace(name.Get()) == "" {
+		if busy.Get() {
+			return
+		}
+		if !validEntryName(name.Get()) {
 			problem.Set(locales.FolderNameError(cx))
 			return
 		}
-		a.mkdir(name.Get())
+		busy.Set(true)
+		a.mkdir(name.Get(), func(error) { busy.Set(false) })
 	}
 	in := textInput(name, locales.FolderNameLabel(cx), locales.FolderNamePlaceholder(cx), func(in *ui.Input) {
 		in.OnSubmit = func(string) { submit() }
@@ -288,17 +313,22 @@ func (a *App) mkdirSheet(cx *core.Scope, _ sheetState) core.Node {
 	})
 	return a.sheetFrame(locales.MkdirTitle(cx), []core.Node{field(cx, locales.FolderNameLabel(cx), in, problem.Get)},
 		[]core.Node{ui.Button{Text: locales.Cancel(cx), Variant: ui.ButtonSecondary, Flex: 1, OnPress: a.closeSheet},
-			ui.Button{Text: locales.Create(cx), Flex: 1, OnPress: submit, TestID: "mkdir-confirm"}})
+			ui.Button{Text: locales.Create(cx), Flex: 1, OnPress: submit, Disabled: busy.Get, TestID: "mkdir-confirm"}})
 }
 
 func (a *App) newFileSheet(cx *core.Scope, _ sheetState) core.Node {
 	name, body, problem := core.NewSignal(cx, ""), core.NewSignal(cx, ""), core.NewSignal(cx, "")
+	busy := core.NewSignal(cx, false)
 	submit := func() {
-		if strings.TrimSpace(name.Get()) == "" {
+		if busy.Get() {
+			return
+		}
+		if !validEntryName(name.Get()) {
 			problem.Set(locales.FileNameError(cx))
 			return
 		}
-		a.newFile(name.Get(), body.Get())
+		busy.Set(true)
+		a.newFile(name.Get(), body.Get(), func(error) { busy.Set(false) })
 	}
 	return a.sheetFrame(locales.NewFileTitle(cx), []core.Node{
 		field(cx, locales.FileNameLabel(cx), textInput(name, locales.FileNameLabel(cx), locales.FileNamePlaceholder(cx), func(in *ui.Input) {
@@ -310,7 +340,7 @@ func (a *App) newFileSheet(cx *core.Scope, _ sheetState) core.Node {
 			in.Style = core.Style{MinHeight: core.Pt(120)}
 		}), nil),
 	}, []core.Node{ui.Button{Text: locales.Cancel(cx), Variant: ui.ButtonSecondary, Flex: 1, OnPress: a.closeSheet},
-		ui.Button{Text: locales.CreateFile(cx), Flex: 1, OnPress: submit, TestID: "newfile-confirm"}})
+		ui.Button{Text: locales.CreateFile(cx), Flex: 1, OnPress: submit, Disabled: busy.Get, TestID: "newfile-confirm"}})
 }
 
 func (a *App) uploadSheet(cx *core.Scope, _ sheetState) core.Node {
@@ -488,6 +518,7 @@ func (a *App) pickerSheet(cx *core.Scope, st sheetState) core.Node {
 		}
 		return browse.Sort(out, store.SortName, false)
 	}
+	busy := core.NewSignal(cx, false)
 	blocked := func() string {
 		p := a.pickPath.Get()
 		switch {
@@ -495,6 +526,11 @@ func (a *App) pickerSheet(cx *core.Scope, st sheetState) core.Node {
 			return locales.DirNeedStorage(cx)
 		case spec.Exclude != "" && p == spec.Exclude:
 			return locales.MoveAlready(cx)
+		}
+		for _, t := range spec.ExcludeTrees {
+			if p == t || strings.HasPrefix(p, t+"/") {
+				return locales.MoveAlready(cx)
+			}
 		}
 		return ""
 	}
@@ -532,9 +568,17 @@ func (a *App) pickerSheet(cx *core.Scope, st sheetState) core.Node {
 		current, note, up, core.View{Style: core.Style{Gap: 8}, TestID: "picker-list", Children: []core.Node{list}}, loading, empty, failed,
 	}, []core.Node{
 		ui.Button{Text: locales.Back(cx), Variant: ui.ButtonSecondary, Flex: 1, OnPress: leave, TestID: "picker-back"},
-		ui.Button{Text: spec.ConfirmText, Flex: 1, Disabled: func() bool { return blocked() != "" }, TestID: "picker-confirm", OnPress: func() {
+		ui.Button{Text: spec.ConfirmText, Flex: 1, Disabled: func() bool { return busy.Get() || blocked() != "" }, TestID: "picker-confirm", OnPress: func() {
+			if busy.Get() {
+				return
+			}
 			dir := a.pickPath.GetUntracked()
-			spec.Confirm(dir)
+			if spec.ConfirmWith != nil {
+				busy.Set(true)
+				spec.ConfirmWith(dir, func(error) { busy.Set(false) })
+			} else if spec.Confirm != nil {
+				spec.Confirm(dir)
+			}
 			if spec.Back.Kind != sheetNone {
 				a.openSheet(spec.Back)
 			}
@@ -621,4 +665,15 @@ func (a *App) setLocalDir(siteID, dir string) {
 		dir = locales.LocalDirAsk(a.cx)
 	}
 	a.toast(locales.ToastLocalDir(a.cx, dir))
+}
+
+// quitConfirmSheet asks the user before quitting while transfers are active.
+func (a *App) quitConfirmSheet(cx *core.Scope, _ sheetState) core.Node {
+	th := theme.Of(cx)
+	return a.sheetFrame(locales.QuitConfirmTitle(cx),
+		[]core.Node{txtf(cx, func() string { return locales.QuitConfirmBody(cx, max(1, running(a.tasks.Get()))) }, theme.TypeSmall, cSecond)},
+		[]core.Node{
+			ui.Button{Text: locales.QuitConfirmCancel(cx), Variant: ui.ButtonSecondary, Flex: 1, OnPress: a.closeSheet, TestID: "quit-cancel"},
+			ui.Button{Text: locales.QuitConfirmAction(cx), Flex: 1, Color: th.Danger, OnPress: a.confirmQuitNow, TestID: "quit-confirm"},
+		})
 }

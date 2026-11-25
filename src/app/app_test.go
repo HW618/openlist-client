@@ -745,3 +745,296 @@ func TestSignOutDeletesTheSavedLoginAndNothingElseDoes(t *testing.T) {
 	}
 	app.WaitForGone("text:Sign out", time.Second)
 }
+
+func TestSearchEmptyServerHitsDoesNotCrawlFolders(t *testing.T) {
+	var listCalls, searchCalls int
+	var mu sync.Mutex
+	mux := http.NewServeMux()
+	reply := func(w http.ResponseWriter, data any) {
+		_ = json.NewEncoder(w).Encode(map[string]any{"code": 200, "message": "success", "data": data})
+	}
+	mux.HandleFunc("/api/fs/list", func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		listCalls++
+		mu.Unlock()
+		reply(w, map[string]any{"content": []fakeEntry{
+			{Name: "Docs", IsDir: true, Mod: "2026-01-02T03:04:05Z"},
+			{Name: "Sub", IsDir: true, Mod: "2026-01-02T03:04:05Z"},
+		}, "total": 2, "provider": "Local"})
+	})
+	mux.HandleFunc("/api/fs/search", func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		searchCalls++
+		mu.Unlock()
+		reply(w, map[string]any{"content": []any{}, "total": 0})
+	})
+	srv := httptest.NewServer(cors(mux))
+	t.Cleanup(srv.Close)
+
+	app := start(t, seed(srv.URL))
+	app.WaitFor("id:file-Docs", 2*time.Second)
+	mu.Lock()
+	beforeLists := listCalls
+	mu.Unlock()
+
+	app.Press("text:Everywhere")
+	app.Type("id:search", "nonexistent-item")
+	app.Advance(time.Second)
+	app.WaitFor("text:No matching files", 3*time.Second)
+
+	mu.Lock()
+	afterLists := listCalls
+	gotSearch := searchCalls
+	mu.Unlock()
+	if gotSearch == 0 {
+		t.Fatal("expected /api/fs/search to be called")
+	}
+	if afterLists != beforeLists {
+		t.Fatalf("empty server search fell back to crawling %d folder(s)", afterLists-beforeLists)
+	}
+}
+
+func TestMkdirRejectsPathTraversal(t *testing.T) {
+	srv := newFakeServer(t)
+	app := start(t, seed(srv.URL))
+	app.WaitFor("id:file-Docs", 2*time.Second)
+	app.Press("id:fab")
+	app.Press("role:button New folder")
+	app.Type("id:mkdir-input", "../escape")
+	app.Press("id:mkdir-confirm")
+	app.WaitFor("text:Enter a folder name", time.Second)
+	if got := srv.log(); len(got) != 0 {
+		t.Fatalf("expected no server mkdir call, got %v", got)
+	}
+}
+
+func TestMoveBlocksMovingFolderIntoItselfOrSubfolder(t *testing.T) {
+	srv := newFakeServer(t)
+	app := start(t, seed(srv.URL))
+	app.WaitFor("id:file-Docs", 2*time.Second)
+	app.Press("id:file-Docs")
+	app.WaitFor("id:file-Reports", 2*time.Second)
+	app.LongPress("id:file-Reports")
+	app.Press("id:batch-move")
+	app.WaitFor("id:picker-confirm", time.Second)
+	app.WaitFor("id:picker-list >> text:Reports", 2*time.Second)
+	app.Press("id:picker-list >> text:Reports")
+	app.WaitFor("text:Already in this folder", time.Second)
+	app.Press("id:picker-back")
+	app.WaitForGone("id:picker-confirm", time.Second)
+	if got := srv.log(); len(got) != 0 {
+		t.Fatalf("folder was moved into itself: %v", got)
+	}
+}
+
+func TestResumedDownloadWaitsForVaultTokens(t *testing.T) {
+	var sawAuth string
+	var mu sync.Mutex
+	mux := http.NewServeMux()
+	reply := func(w http.ResponseWriter, data any) {
+		_ = json.NewEncoder(w).Encode(map[string]any{"code": 200, "message": "success", "data": data})
+	}
+	mux.HandleFunc("/api/fs/list", func(w http.ResponseWriter, r *http.Request) {
+		reply(w, map[string]any{"content": []fakeEntry{{Name: "secret.txt", Size: 5}}, "total": 1, "provider": "Local"})
+	})
+	mux.HandleFunc("/api/fs/get", func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		sawAuth = r.Header.Get("Authorization")
+		mu.Unlock()
+		if r.Header.Get("Authorization") != "good" {
+			_ = json.NewEncoder(w).Encode(map[string]any{"code": 401, "message": "unauthorized"})
+			return
+		}
+		reply(w, map[string]any{"name": "secret.txt", "size": 5, "raw_url": "http://" + r.Host + "/d/secret.txt"})
+	})
+	mux.HandleFunc("/d/secret.txt", func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("hello"))
+	})
+	srv := httptest.NewServer(cors(mux))
+	t.Cleanup(srv.Close)
+
+	dir := t.TempDir()
+	b := newFakeSecrets(map[string]string{"s1": "good"})
+	b.gate = make(chan struct{})
+	sites, _ := json.Marshal(map[string]any{"version": 1, "value": []store.Site{{ID: "s1", Name: "Home", URL: srv.URL, Settings: store.SiteSettings{LocalDir: dir}}}})
+	tasks, _ := json.Marshal(map[string]any{"version": 1, "value": []map[string]any{{
+		"id": "tr-restored-1", "name": "secret.txt", "direction": "download",
+		"siteId": "s1", "siteName": "Home", "remotePath": "/secret.txt", "localPath": dir, "total": 5, "status": "paused",
+	}}})
+	app := startWith(t, newVault(b, nil), nsgotest.Storage(map[string]string{
+		"sites": string(sites), "currentSite": `{"version":1,"value":"s1"}`, "transfers": string(tasks),
+	}))
+	app.Press("id:tab-transfers")
+	app.WaitFor("text:secret.txt", time.Second)
+	app.Press("role:button Resume")
+	app.Advance(100 * time.Millisecond)
+	close(b.gate)
+	app.WaitUntil(3*time.Second, func() bool {
+		got, err := os.ReadFile(filepath.Join(dir, "secret.txt"))
+		return err == nil && string(got) == "hello"
+	})
+	mu.Lock()
+	defer mu.Unlock()
+	if sawAuth != "good" {
+		t.Fatalf("download ran with auth %q, want good", sawAuth)
+	}
+}
+
+func TestOfflineTaskNameStripsMarkdownLinks(t *testing.T) {
+	for in, want := range map[string]string{
+		"transfer [](/downloads/SimpleHttp/54a70e34-4a7a-41ec-834b-d2b3b74a170e/settings) to [/local](/)": "transfer settings to /local",
+		"transfer [archive.zip](/downloads/aria2/123/archive.zip) to [/Media](/Media)":                  "transfer archive.zip to /Media",
+		"download http://127.0.0.1:5244/api/public/settings to (/local)":                                "download http://127.0.0.1:5244/api/public/settings to (/local)",
+		"[aria2]: downloading":                                                                          "[aria2]: downloading",
+	} {
+		if got := offlineTaskName(in); got != want {
+			t.Errorf("offlineTaskName(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestSheetFooterStaysAboveKeyboard(t *testing.T) {
+	srv := newFakeServer(t)
+	app := start(t, seed(srv.URL), nsgotest.Size(402, 874), nsgotest.Environment(core.Environment{
+		SafeArea: core.Edges{Top: 59, Bottom: 34},
+	}))
+	app.WaitFor("id:file-Media", 2*time.Second)
+	app.Press("id:file-Media")
+	app.WaitFor("id:file-movie.mp4", 2*time.Second)
+	app.Press("id:fab")
+	app.Press("text:Offline download")
+	app.WaitFor("id:offline-add", time.Second)
+	app.SetEnvironment(core.Environment{
+		SafeArea:       core.Edges{Top: 59, Bottom: 34},
+		KeyboardHeight: 336,
+	})
+	windowY := func(v *nsgotest.View) core.Points {
+		y := v.Frame.Origin.Y
+		for p := v.Parent; p != nil; p = p.Parent {
+			y += p.Frame.Origin.Y - p.Offset.Y
+		}
+		return y
+	}
+	app.WaitUntil(time.Second, func() bool {
+		btn := app.Find("id:offline-add")
+		urls := app.Find("id:offline-urls")
+		keyboardTop := core.Points(874 - 336)
+		return windowY(btn)+btn.Frame.Size.Height <= keyboardTop && windowY(urls) >= 59
+	})
+}
+
+func TestHeaderAddSiteAndSitesSheetTopAction(t *testing.T) {
+	srv := newFakeServer(t)
+	var sitesList []store.Site
+	for i := 0; i < 12; i++ {
+		sitesList = append(sitesList, store.Site{ID: "s" + itoa(i+1), Name: "Node-" + string(rune('A'+i)), URL: srv.URL})
+	}
+	rawSites, _ := json.Marshal(map[string]any{"version": 1, "value": sitesList})
+	windowY := func(v *nsgotest.View) core.Points {
+		y := v.Frame.Origin.Y
+		for p := v.Parent; p != nil; p = p.Parent {
+			y += p.Frame.Origin.Y - p.Offset.Y
+		}
+		return y
+	}
+
+	for _, tc := range []struct {
+		name      string
+		w, h      core.Points
+		directAdd bool
+	}{
+		{"phone", 390, 844, true},
+		{"desktop", 960, 720, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			app := start(t,
+				nsgotest.Size(tc.w, tc.h),
+				nsgotest.Storage(map[string]string{"sites": string(rawSites), "currentSite": `{"version":1,"value":"s1"}`}),
+			)
+			app.WaitFor("id:header-add-site", 2*time.Second)
+			if tc.directAdd {
+				app.Press("id:header-add-site")
+				app.WaitFor("id:site-url", time.Second)
+				app.Press("role:button Cancel")
+				app.WaitForGone("id:site-url", time.Second)
+			}
+
+			app.Press("id:site-pill")
+			app.WaitFor("id:add-new-site", time.Second)
+			addBtn := app.Find("id:add-new-site")
+			secondRow := app.Find("role:dialog >> text:Node-B")
+			if !(windowY(addBtn) < windowY(secondRow)) {
+				t.Fatalf("%s: add-new-site Y=%v should sit above site list Y=%v without scrolling",
+					tc.name, windowY(addBtn), windowY(secondRow))
+			}
+			app.Press("id:add-new-site")
+			app.WaitFor("id:site-url", time.Second)
+		})
+	}
+}
+
+func TestParentDirButtonNavigatesUpAndDisablesAtRoot(t *testing.T) {
+	srv := newFakeServer(t)
+	app := start(t, seed(srv.URL))
+	app.WaitFor("id:file-Docs", 2*time.Second)
+	if !app.Find("id:parent-dir").Props.Disabled {
+		t.Fatal("parent-dir button should be disabled at root /")
+	}
+
+	app.Press("id:file-Docs")
+	app.WaitFor("id:file-Reports", 2*time.Second)
+	if app.Find("id:parent-dir").Props.Disabled {
+		t.Fatal("parent-dir button should be enabled inside /Docs")
+	}
+
+	app.Press("id:file-Reports")
+	app.WaitFor("text:This folder is empty", 2*time.Second)
+	app.Press("id:parent-dir")
+	app.WaitFor("id:file-notes.txt", 2*time.Second)
+
+	app.Press("id:parent-dir")
+	app.WaitFor("id:file-Media", 2*time.Second)
+	if !app.Find("id:parent-dir").Props.Disabled {
+		t.Fatal("parent-dir button should be disabled again at root /")
+	}
+}
+
+func TestCollapsedDefaultSiteShowsActionsWithoutExpanding(t *testing.T) {
+	srv := newFakeServer(t)
+	sites, _ := json.Marshal(map[string]any{"version": 1, "value": []store.Site{
+		{ID: "s0", Name: "Office", URL: srv.URL},
+		{ID: "s1", Name: "Home", URL: srv.URL},
+	}})
+	secrets := &store.MemorySecrets{}
+	_ = secrets.Set("s1", "good")
+	app := startWith(t, secrets, nsgotest.Storage(map[string]string{
+		"sites": string(sites), "currentSite": `{"version":1,"value":"s1"}`,
+	}))
+	app.Press("id:tab-settings")
+	app.WaitFor("text:Home", time.Second)
+	if app.Exists("text:Office") {
+		t.Fatal("non-active site should stay hidden while collapsed")
+	}
+	app.WaitFor("role:button Test", time.Second)
+	app.WaitFor("role:button Sign out", time.Second)
+	app.WaitFor("role:button Delete", time.Second)
+}
+
+func TestDesktopLocalDirUsesFolderPickerNotTextInput(t *testing.T) {
+	srv := newFakeServer(t)
+	picked := t.TempDir()
+	app := start(t,
+		seed(srv.URL),
+		nsgotest.Size(960, 720),
+		nsgotest.Environment(core.Environment{OS: core.OSMacOS, Idiom: core.IdiomDesktop}),
+	)
+	app.PickDirectories = func(nsgotest.DirectoryPick) []core.Directory {
+		return []core.Directory{{Path: picked}}
+	}
+	app.Press("id:tab-settings")
+	app.WaitFor("id:local-dir-change", time.Second)
+	app.Press("id:local-dir-change")
+	app.WaitUntil(time.Second, func() bool {
+		return len(app.DirectoryPicks) == 1 && slices.Contains(app.Texts(), picked)
+	})
+}

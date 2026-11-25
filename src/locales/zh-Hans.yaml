@@ -6,6 +6,7 @@ tabSettings: 设置
 tabLabel: 主导航
 
 siteSwitchLabel: 切换 OpenList 站点
+headerAddSite: "+ 添加站点"
 newOrUploadLabel: 新建或上传
 refreshDirLabel: 刷新当前目录
 noSiteName: 未添加站点
@@ -16,6 +17,7 @@ clearSearchLabel: 清空搜索
 scopeLabel: 搜索范围
 scopeCurrent: 当前目录
 scopeGlobal: 全局
+parentDirLabel: 返回上一级文件夹
 sortName: 名称
 sortSize: 大小
 sortDate: 时间
@@ -216,20 +218,21 @@ groupAppearance: 外观与浏览偏好
 groupNotifications: 通知
 groupPaths: 目录与下载路径
 groupAbout: 存储与关于
-notifyMaster: 任务完成通知
-notifyMasterDesc: 上传、下载与离线任务完成或失败时发出系统通知
-notifySuccess: 成功时通知
-notifySuccessDesc: 任务成功完成时提醒；多条合并为一条
-notifyFailure: 失败时通知
-notifyFailureDesc: 任务失败时提醒
-notifyLimitsTitle: 平台限制
-notifyLimitsDesc: 应用被系统杀掉后传输会中断，也就没有通知；离线下载在服务器完成时，应用未运行也收不到。Linux 与网页版只显示本次运行发出的通知。Windows 点击通知需通过安装包安装过本应用。
-notifyDownloadDone: "{count, plural, other {# 个文件已下载}}"
-notifyUploadDone: "{count, plural, other {# 个文件已上传}}"
-notifyTransferBoth: "{count, plural, other {# 个传输已完成}}"
-notifyTransferFailed: "{count, plural, other {# 个传输失败}}"
-notifyOfflineDone: "{count, plural, other {# 个离线下载已完成}}"
-notifyOfflineFailed: "{count, plural, other {# 个离线下载失败}}"
+notifyMaster: 开启通知
+notifyMasterDesc: 传输进行中在通知栏显示实时进度，完成或失败时发出提醒；条目太多时自动折叠汇总
+notifyProgressDownloadTitle: "正在下载：{name}"
+notifyProgressUploadTitle: "正在上传：{name}"
+notifyProgressMultiTitle: "{count, plural, other {正在进行 # 个传输任务}}"
+notifyProgressMultiBody: "已完成 {percent}% · {done} / {total}"
+notifyItemDownloadDone: "已下载：{name}"
+notifyItemUploadDone: "已上传：{name}"
+notifyItemTransferFailed: "传输失败：{name}"
+notifyItemOfflineDone: "离线下载完成：{name}"
+notifyItemOfflineFailed: "离线下载失败：{name}"
+notifySummaryDone: "{count, plural, other {# 个任务已完成}}"
+notifySummaryFailed: "{count, plural, other {# 个任务失败}}"
+notifySummaryMixed: "{total, plural, other {# 个任务已结束}}（成功 {ok}，失败 {fail}）"
+notifySummaryCollapsedBody: 条目较多已折叠，点击查看传输记录
 notifyOpenTransfers: 点击查看传输记录
 siteLatency: "{latency}"
 siteLatencyLine: "{url} · 延迟 {latency}"
@@ -346,3 +349,27 @@ toastSiteNeedLogin: "{name}：未登录或登录已过期，请重新登录"
 toastSiteDisabled: "{name}：账号 {user} 已被禁用"
 toastSiteFailReason: "{name}：无法连接（{reason}）"
 siteStatusLine: "{url} · {status}"
+
+# 传输页内联提示
+transferBannerProgressHeading: OpenList Client · 传输进度
+transferBannerSummaryHeading: OpenList Client · 传输汇总
+transferBannerSummaryBody: "已下载 {downloaded} · 已上传 {uploaded} · 点击关闭"
+transferBannerCloseLabel: 关闭传输提示
+
+# 桌面端后台运行与系统托盘
+groupDesktop: 后台运行
+closeToTrayTitle: 关闭窗口时最小化到托盘
+closeToTrayDesc: 关闭主窗口后在系统托盘继续传输；点击托盘图标可重新打开
+toastCloseToTrayOn: 关闭窗口将最小化到系统托盘
+toastCloseToTrayOff: 关闭窗口将直接退出（有活跃传输时先确认）
+trayTooltipIdle: OpenList · 暂无进行中的传输
+trayTooltipActive: "{count, plural, other {OpenList · 正在传输 # 个任务}}（{percent}%）"
+trayMenuIdle: 暂无进行中的传输
+trayMenuActive: "{count, plural, other {正在传输 # 个任务}} · {percent}%"
+trayShowWindow: 显示主窗口
+trayOpenTransfers: 打开传输队列
+trayQuit: 退出 OpenList
+quitConfirmTitle: 仍有传输正在进行
+quitConfirmBody: "{count, plural, other {当前有 # 个任务正在传输。退出后未完成的下载会保留断点，下次打开时可继续。}}"
+quitConfirmCancel: 继续传输
+quitConfirmAction: 退出应用

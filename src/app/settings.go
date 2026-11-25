@@ -2,6 +2,7 @@ package app
 
 import (
 	"github.com/nsgo-dev/nsgo/core"
+	"github.com/nsgo-dev/nsgo/desktop"
 	"github.com/nsgo-dev/nsgo/icons/lucide"
 	"github.com/nsgo-dev/nsgo/ui"
 
@@ -45,6 +46,9 @@ func (a *App) settingsPage(cx *core.Scope) core.Node {
 				group(locales.GroupSites(cx), a.sitesList(cx)),
 				group(locales.GroupAppearance(cx), a.appearanceRows(cx)...),
 				group(locales.GroupNotifications(cx), a.notificationRows(cx)...),
+				core.Show{When: func() bool { return desktop.IsAvailable(cx) }, Then: func(cx *core.Scope) core.Node {
+					return group(locales.GroupDesktop(cx), a.desktopRows(cx)...)
+				}},
 				group(locales.GroupPaths(cx), a.pathRows(cx)...),
 				group(locales.GroupAbout(cx), a.aboutRows(cx)...),
 			}}}})
@@ -70,9 +74,10 @@ func (a *App) sitesList(cx *core.Scope) core.Node {
 	build := func(cx *core.Scope, visible func() []store.Site) core.Node {
 		return core.Each(visible, func(s store.Site) string { return s.ID },
 			func(cx *core.Scope, site func() store.Site, _ func() int) core.Node {
-				s := site()
-				current := func() bool { return a.siteID.Get() == s.ID }
+				id := site().ID
+				current := func() bool { return a.siteID.Get() == id }
 				line := func() string {
+					s := site()
 					st := a.status.Get()[s.ID]
 					lat := browse.Latency(st.Latency)
 					switch {
@@ -114,27 +119,31 @@ func (a *App) sitesList(cx *core.Scope) core.Node {
 					tile(cx, lucide.Server, "", 36, 10),
 					core.View{Style: fillStyle.Merge(core.Style{Gap: 6}), Children: []core.Node{
 						core.View{Style: core.Style{Gap: 2}, Children: []core.Node{
-							row(6, oneLine(txt(cx, s.Name, theme.TypeBody, cText)),
+							row(6, oneLine(txtf(cx, func() string { return site().Name }, theme.TypeBody, cText)),
 								core.Show{When: current, Then: func(cx *core.Scope) core.Node { return ui.Badge{Text: locales.SiteCurrentTag(cx)} }}),
-							oneLine(txtf(cx, line, theme.TypeCaption, cMuted)),
+							txtf(cx, line, theme.TypeCaption, cMuted),
 						}},
 						core.View{Style: core.Style{Direction: core.Row, Gap: 6, AlignItems: core.AlignCenter, Wrap: core.Wrap}, Children: []core.Node{
-							small(locales.TestSite(cx), func() { a.testSite(s) }, false),
-							core.Show{When: func() bool { st := a.status.Get()[s.ID]; return st.Auth == authNeedLogin }, Then: func(cx *core.Scope) core.Node {
+							small(locales.TestSite(cx), func() { a.testSite(site()) }, false),
+							core.Show{When: func() bool { st := a.status.Get()[id]; return st.Auth == authNeedLogin }, Then: func(cx *core.Scope) core.Node {
 								return small(locales.SignInAction(cx), func() {
 									if !current() {
-										a.switchSite(s.ID)
+										a.switchSite(id)
 									}
 									a.openSheet(sheetState{Kind: sheetSignIn})
 								}, false)
 							}},
-							core.Show{When: func() bool { return a.signedIn(s.ID) }, Then: func(cx *core.Scope) core.Node {
-								return small(locales.SignOutAction(cx), func() { a.signOut(s) }, false)
+							core.Show{When: func() bool { return a.signedIn(id) }, Then: func(cx *core.Scope) core.Node {
+								return small(locales.SignOutAction(cx), func() { a.signOut(site()) }, false)
 							}},
 							core.Show{When: func() bool { return !current() }, Then: func(cx *core.Scope) core.Node {
-								return small(locales.SwitchSite(cx), func() { a.switchSite(s.ID); a.toast(locales.ToastSwitchedSite(cx, s.Name)) }, false)
+								return small(locales.SwitchSite(cx), func() {
+									s := site()
+									a.switchSite(s.ID)
+									a.toast(locales.ToastSwitchedSite(cx, s.Name))
+								}, false)
 							}},
-							small(locales.DeleteSite(cx), func() { a.removeSite(s.ID); a.toast(locales.ToastSiteRemoved(cx)) }, true),
+							small(locales.DeleteSite(cx), func() { a.removeSite(id); a.toast(locales.ToastSiteRemoved(cx)) }, true),
 						}}}})
 			})
 	}
@@ -210,7 +219,8 @@ func (a *App) setDefaultSort(k store.SortKey) {
 	a.sortKey.Set(k)
 }
 
-// notificationRows are the task-completion notification toggles.
+// notificationRows shows only the single notification toggle; both success and
+// failure notify when enabled, and many notifications collapse into one.
 func (a *App) notificationRows(cx *core.Scope) []core.Node {
 	master := ui.Switch{
 		Checked: func() bool { return a.prefs.Get().NotifyMaster() },
@@ -222,62 +232,72 @@ func (a *App) notificationRows(cx *core.Scope) []core.Node {
 			}
 		},
 	}
-	success := ui.Switch{
-		Checked:  func() bool { return a.prefs.Get().NotifySuccess() },
-		Label:    locales.NotifySuccess(cx), TestID: "notify-success",
-		Disabled: func() bool { return !a.prefs.Get().NotifyMaster() },
-		OnChange: func(on bool) { a.saveNotifyToggle(func(n *store.NotifyPrefs) { n.Success = on }) },
-	}
-	failure := ui.Switch{
-		Checked:  func() bool { return a.prefs.Get().NotifyFailure() },
-		Label:    locales.NotifyFailure(cx), TestID: "notify-failure",
-		Disabled: func() bool { return !a.prefs.Get().NotifyMaster() },
-		OnChange: func(on bool) { a.saveNotifyToggle(func(n *store.NotifyPrefs) { n.Failure = on }) },
-	}
 	return []core.Node{
 		optionRow(cx, locales.NotifyMaster(cx), locales.NotifyMasterDesc(cx), master),
-		hairline(cx),
-		optionRow(cx, locales.NotifySuccess(cx), locales.NotifySuccessDesc(cx), success),
-		hairline(cx),
-		optionRow(cx, locales.NotifyFailure(cx), locales.NotifyFailureDesc(cx), failure),
-		hairline(cx),
-		core.View{Style: core.Style{Gap: 2, Padding: core.Symmetric(12, 0)}, Children: []core.Node{
-			txt(cx, locales.NotifyLimitsTitle(cx), theme.TypeBody, cText),
-			txt(cx, locales.NotifyLimitsDesc(cx), theme.TypeCaption, cMuted)}},
 	}
 }
 
-// pathValue shows a folder with a button that changes it, and one that clears
-// it where there is a default to fall back to.
-func (a *App) pathValue(cx *core.Scope, value func() string, empty string, choose func(), clear func()) core.Node {
-	return a.pathValueID(cx, "", value, empty, choose, clear)
+// desktopRows holds desktop-only background/tray settings.
+func (a *App) desktopRows(cx *core.Scope) []core.Node {
+	closeToTray := ui.Switch{
+		Checked: func() bool { return a.prefs.Get().CloseToTray() },
+		Label:   locales.CloseToTrayTitle(cx),
+		TestID:  "close-to-tray",
+		OnChange: func(on bool) {
+			a.savePrefs(func(p *store.Prefs) {
+				p.Desktop = store.DesktopPrefs{Set: true, CloseToTray: on}
+			})
+			if on {
+				a.toast(locales.ToastCloseToTrayOn(cx))
+			} else {
+				a.toast(locales.ToastCloseToTrayOff(cx))
+			}
+		},
+	}
+	return []core.Node{
+		optionRow(cx, locales.CloseToTrayTitle(cx), locales.CloseToTrayDesc(cx), closeToTray),
+	}
 }
 
-// pathValueID is pathValue with a test ID for its button.
-func (a *App) pathValueID(cx *core.Scope, id string, value func() string, empty string, choose func(), clear func()) core.Node {
+// pathRow renders a folder setting with its title, description and action
+// buttons on top, and the full wrapping path underneath so long paths stay
+// readable on narrow phone screens.
+func (a *App) pathRow(cx *core.Scope, id, title, desc string, value func() string, empty string, choose func(), clear func()) core.Node {
+	th := theme.Of(cx)
 	text := func() string {
 		if v := value(); v != "" {
 			return v
 		}
 		return empty
 	}
-	kids := []core.Node{
-		core.View{Style: core.Style{MaxWidth: core.Pt(180), FlexShrink: 1, MinWidth: core.Pt(0)}, Children: []core.Node{
-			oneLine(txtf(cx, text, theme.TypeCaption.Merge(core.Style{TextAlign: core.TextAlignEnd}), cMuted))}},
-		textButtonID(cx, id, func() string { return locales.Change(cx) }, choose),
-	}
+	var actions []core.Node
 	if clear != nil {
-		kids = append(kids[:1], append([]core.Node{core.Show{When: func() bool { return value() != "" }, Then: func(cx *core.Scope) core.Node {
+		actions = append(actions, core.Show{When: func() bool { return value() != "" }, Then: func(cx *core.Scope) core.Node {
 			return iconButton(lucide.X, locales.ClearSearchLabel(cx), clear)
-		}}}, kids[1:]...)...)
+		}})
 	}
-	return core.View{Style: core.Style{Direction: core.Row, AlignItems: core.AlignCenter, Gap: 4, FlexShrink: 1, MinWidth: core.Pt(0)}, Children: kids}
+	actions = append(actions, textButtonID(cx, id, func() string { return locales.Change(cx) }, choose))
+	head := core.View{Style: core.Style{Direction: core.Row, AlignItems: core.AlignCenter, Gap: 12}, Children: []core.Node{
+		core.View{Style: fillStyle.Merge(core.Style{Gap: 2}), Children: []core.Node{
+			txt(cx, title, theme.TypeBody, cText),
+			txt(cx, desc, theme.TypeCaption, cMuted),
+		}},
+		core.View{Style: core.Style{Direction: core.Row, AlignItems: core.AlignCenter, Gap: 4, FlexShrink: 0}, Children: actions},
+	}}
+	pill := press(title, choose,
+		core.Style{Direction: core.Row, AlignItems: core.AlignCenter, Gap: 8, Padding: core.Symmetric(8, 10), CornerRadius: theme.RadiusSM, BorderWidth: 1, AlignSelf: core.AlignStretch},
+		func() core.Style { return core.Style{Background: th.Surface(), BorderColor: th.BorderSoft()} },
+		core.View{Style: fillStyle, Children: []core.Node{txtf(cx, text, theme.TypeCaption, cMuted)}},
+		icon(cx, lucide.ChevronRight, 14, cFaint),
+	)
+	return core.View{Style: core.Style{Gap: 8, Padding: core.Symmetric(12, 0)}, Children: []core.Node{head, pill}}
 }
 
 // pathRows are the settings of the current site: its folders.
 func (a *App) pathRows(cx *core.Scope) []core.Node {
 	cur := func() store.Site { s, _ := a.site(); return s }
-	filesDir := a.pathValue(cx, func() string { return cur().Settings.FilesPath }, "/",
+	filesRow := a.pathRow(cx, "", locales.FilesDirTitle(cx), locales.FilesDirDesc(cx),
+		func() string { return cur().Settings.FilesPath }, "/",
 		func() {
 			s, ok := a.site()
 			if !ok {
@@ -292,7 +312,8 @@ func (a *App) pathRows(cx *core.Scope) []core.Node {
 				}})
 		},
 		func() { a.updateSite(a.siteID.GetUntracked(), func(st *store.Site) { st.Settings.FilesPath = "" }) })
-	offDir := a.pathValue(cx, func() string { return cur().Settings.OfflinePath }, locales.DirNeedStorage(cx),
+	offRow := a.pathRow(cx, "", locales.OfflineDirTitle(cx), locales.OfflineDirDesc(cx),
+		func() string { return cur().Settings.OfflinePath }, locales.DirNeedStorage(cx),
 		func() {
 			s, ok := a.site()
 			if !ok {
@@ -307,21 +328,23 @@ func (a *App) pathRows(cx *core.Scope) []core.Node {
 				}})
 		},
 		func() { a.updateSite(a.siteID.GetUntracked(), func(st *store.Site) { st.Settings.OfflinePath = "" }) })
-	var local core.Node
+	var localRow core.Node
 	switch {
 	case savesThroughDialog():
-		local = a.pathValueID(cx, "local-dir-change", func() string {
-			s, ok := a.site()
-			switch {
-			case !ok:
-				return ""
-			case asksEachDownload(s):
-				return locales.LocalDirAsk(cx)
-			}
-			return a.downloadDir(s)
-		}, defaultDownloadDir(), a.pickLocalDir, nil)
+		localRow = a.pathRow(cx, "local-dir-change", locales.LocalDirSettingTitle(cx), locales.LocalDirSettingDesc(cx),
+			func() string {
+				s, ok := a.site()
+				switch {
+				case !ok:
+					return ""
+				case asksEachDownload(s):
+					return locales.LocalDirAsk(cx)
+				}
+				return a.downloadDir(s)
+			}, defaultDownloadDir(), a.pickLocalDir, nil)
 	case isWeb():
-		local = a.pathValue(cx, func() string { return a.webFolders.Get()[a.siteID.Get()] }, locales.LocalDirNone(cx), a.pickLocalDir,
+		localRow = a.pathRow(cx, "", locales.LocalDirSettingTitle(cx), locales.LocalDirSettingDesc(cx),
+			func() string { return a.webFolders.Get()[a.siteID.Get()] }, locales.LocalDirNone(cx), a.pickLocalDir,
 			func() {
 				id := a.siteID.GetUntracked()
 				webFolderForget(id)
@@ -329,19 +352,20 @@ func (a *App) pathRows(cx *core.Scope) []core.Node {
 				a.toast(locales.ToastBrowserDownloadOn(cx))
 			})
 	default:
-		local = a.pathValueID(cx, "local-dir-change", func() string {
-			if s, ok := a.site(); ok {
-				return a.downloadDir(s)
-			}
-			return ""
-		}, defaultDownloadDir(), a.pickLocalDir, nil)
+		localRow = a.pathRow(cx, "local-dir-change", locales.LocalDirSettingTitle(cx), locales.LocalDirSettingDesc(cx),
+			func() string {
+				if s, ok := a.site(); ok {
+					return a.downloadDir(s)
+				}
+				return ""
+			}, defaultDownloadDir(), a.pickLocalDir, nil)
 	}
 	rows := []core.Node{
-		optionRow(cx, locales.FilesDirTitle(cx), locales.FilesDirDesc(cx), filesDir),
+		filesRow,
 		hairline(cx),
-		optionRow(cx, locales.OfflineDirTitle(cx), locales.OfflineDirDesc(cx), offDir),
+		offRow,
 		hairline(cx),
-		optionRow(cx, locales.LocalDirSettingTitle(cx), locales.LocalDirSettingDesc(cx), local),
+		localRow,
 	}
 	if savesThroughDialog() {
 		rows = append(rows, core.Show{

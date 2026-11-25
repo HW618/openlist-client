@@ -1,13 +1,20 @@
 package app
 
 import (
+	"encoding/json"
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/nsgo-dev/nsgo/core"
+	"github.com/nsgo-dev/nsgo/nsgotest"
 
+	"github.com/HW618/openlist-client/src/internal/store"
 	"github.com/HW618/openlist-client/src/internal/transfer"
 )
 
@@ -60,4 +67,51 @@ func TestPickedFilesAreLetGoWhenTheirUploadsAreOver(t *testing.T) {
 		time.Sleep(20 * time.Millisecond)
 	}
 	t.Fatal("the temporary copy was not deleted")
+}
+
+func TestUploadNotLimitedByAPIHTTPTimeout(t *testing.T) {
+	oldAPI := apiHTTP
+	apiHTTP = &http.Client{Timeout: 40 * time.Millisecond}
+	t.Cleanup(func() { apiHTTP = oldAPI })
+
+	var putLen atomic.Int64
+	mux := http.NewServeMux()
+	reply := func(w http.ResponseWriter, data any) {
+		_ = json.NewEncoder(w).Encode(map[string]any{"code": 200, "message": "success", "data": data})
+	}
+	mux.HandleFunc("/api/fs/list", func(w http.ResponseWriter, r *http.Request) {
+		reply(w, map[string]any{"content": []any{}, "total": 0, "provider": "Local"})
+	})
+	mux.HandleFunc("/api/fs/put", func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(120 * time.Millisecond) // longer than apiHTTP.Timeout (40ms)
+		b, _ := io.ReadAll(r.Body)
+		putLen.Store(int64(len(b)))
+		reply(w, nil)
+	})
+	srv := httptest.NewServer(cors(mux))
+	t.Cleanup(srv.Close)
+
+	src := filepath.Join(t.TempDir(), "slow-upload.bin")
+	if err := os.WriteFile(src, []byte("payload-12345"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	sites, _ := json.Marshal(map[string]any{"version": 1, "value": []store.Site{{ID: "s1", Name: "Home", URL: srv.URL}}})
+	app := start(t, nsgotest.Storage(map[string]string{
+		"sites": string(sites), "currentSite": `{"version":1,"value":"s1"}`,
+	}))
+	app.PickFiles = func(nsgotest.FilePick) []core.File {
+		return []core.File{{Name: "slow-upload.bin", Path: src, Size: int64(len("payload-12345"))}}
+	}
+	app.WaitFor("id:fab", 2*time.Second)
+	app.Press("id:fab")
+	app.WaitFor("text:Upload files", 2*time.Second)
+	app.Press("text:Upload files")
+	app.WaitFor("id:upload-pick", 2*time.Second)
+	app.Press("id:upload-pick")
+
+	app.Press("id:tab-transfers")
+	app.WaitFor("text:Done · 13 B", 3*time.Second)
+	if putLen.Load() != int64(len("payload-12345")) {
+		t.Fatalf("uploaded bytes = %d, want %d", putLen.Load(), len("payload-12345"))
+	}
 }

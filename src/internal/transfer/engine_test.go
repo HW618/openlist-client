@@ -168,3 +168,112 @@ func TestPercent(t *testing.T) {
 		t.Fatal("Percent is off")
 	}
 }
+
+func TestUploadRetryResetsDoneAndNeverReportsNegativeSpeed(t *testing.T) {
+	var attempt atomic.Int32
+	e := New(func(Task) RunFunc {
+		return func(ctx context.Context, tk Task, report func(done, total int64)) error {
+			if attempt.Add(1) == 1 {
+				report(5000, 10000)
+				return errors.New("network drop")
+			}
+			if tk.Done != 0 {
+				return errors.New("upload retry did not reset Done to 0")
+			}
+			report(0, 10000)
+			time.Sleep(350 * time.Millisecond)
+			report(2000, 10000)
+			return nil
+		}
+	}, nil, nil)
+	id := e.Add(Task{Name: "up.bin", Direction: Upload, Total: 10000})
+	waitFor(t, "failed", func() bool { return statusOf(e, id) == Failed })
+	e.Retry(id)
+	waitFor(t, "retried speed", func() bool {
+		snap := e.Snapshot()
+		return len(snap) == 1 && (snap[0].Status == Done || snap[0].Speed > 0)
+	})
+	snap := e.Snapshot()
+	if snap[0].Speed < 0 {
+		t.Fatalf("negative speed after upload retry: %v", snap[0].Speed)
+	}
+	waitFor(t, "done", func() bool { return statusOf(e, id) == Done })
+}
+
+func TestCompletedTaskIsNotOverwrittenByConcurrentPause(t *testing.T) {
+	finishing := make(chan struct{})
+	var e *Engine
+	e = New(func(Task) RunFunc {
+		return func(context.Context, Task, func(int64, int64)) error {
+			<-finishing
+			return nil
+		}
+	}, nil, nil)
+	id := e.Add(Task{Name: "fast.bin", Total: 10})
+	waitFor(t, "running", func() bool {
+		e.mu.Lock()
+		defer e.mu.Unlock()
+		return e.running == 1
+	})
+	close(finishing)
+	// Call Pause racing with completion: even if pausing is set right as run returns nil, Done wins.
+	e.Pause(id)
+	waitFor(t, "settled", func() bool {
+		s := statusOf(e, id)
+		return s == Done || s == Paused
+	})
+	// Direct verification on work state transition:
+	if statusOf(e, id) != Done {
+		t.Fatalf("completed task became %v instead of Done", statusOf(e, id))
+	}
+}
+
+func TestSetValidatorPersistsAcrossPauseAndClearsOnDone(t *testing.T) {
+	var e *Engine
+	var notifyCount atomic.Int32
+	valSet := make(chan struct{})
+	var starts atomic.Int32
+	var sawResumedVal atomic.Value
+	sawResumedVal.Store("")
+
+	e = New(func(Task) RunFunc {
+		return func(ctx context.Context, tk Task, _ func(int64, int64)) error {
+			if starts.Add(1) == 1 {
+				e.SetValidator(tk.ID, `"v1"`)
+				close(valSet)
+				<-ctx.Done()
+				return ctx.Err()
+			}
+			sawResumedVal.Store(tk.Validator)
+			return nil
+		}
+	}, func() {
+		notifyCount.Add(1)
+		_ = e.Snapshot()
+	}, nil)
+
+	id := e.Add(Task{Name: "val.bin", Direction: Download, Total: 100})
+	<-valSet
+	waitFor(t, "validator set", func() bool {
+		snap := e.Snapshot()
+		return len(snap) == 1 && snap[0].Validator == `"v1"`
+	})
+
+	e.Pause(id)
+	waitFor(t, "paused", func() bool { return statusOf(e, id) == Paused })
+	if got := e.Snapshot()[0].Validator; got != `"v1"` {
+		t.Fatalf("validator after pause = %q, want \"v1\"", got)
+	}
+
+	e.Resume(id)
+	waitFor(t, "done", func() bool { return statusOf(e, id) == Done })
+	if got, _ := sawResumedVal.Load().(string); got != `"v1"` {
+		t.Fatalf("resumed RunFunc saw validator = %q, want \"v1\"", got)
+	}
+	if got := e.Snapshot()[0].Validator; got != "" {
+		t.Fatalf("validator after done = %q, want empty", got)
+	}
+	if notifyCount.Load() == 0 {
+		t.Fatal("notify was never called")
+	}
+}

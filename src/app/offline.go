@@ -2,6 +2,8 @@ package app
 
 import (
 	"context"
+	"path"
+	"strings"
 	"time"
 
 	"github.com/nsgo-dev/nsgo/core"
@@ -50,7 +52,10 @@ func (a *App) pollOffline() {
 	tick = func() {
 		onTransfers := a.tab.GetUntracked() == tabTransfers
 		wantNotify := a.prefs.GetUntracked().NotifyMaster()
-		if !onTransfers && !wantNotify {
+		curID := a.siteID.GetUntracked()
+		st := a.offline.GetUntracked()
+		adminBlocked := !onTransfers && st.SiteID == curID && st.Admin
+		if (!onTransfers && !wantNotify) || curID == "" || adminBlocked {
 			a.polling = false
 			return
 		}
@@ -62,6 +67,9 @@ func (a *App) pollOffline() {
 
 // refreshOffline reads the offline tasks of the current site.
 func (a *App) refreshOffline() {
+	if !a.ready.GetUntracked() {
+		return
+	}
 	s, ok := a.site()
 	c := a.client()
 	if !ok || c == nil {
@@ -79,18 +87,20 @@ func (a *App) refreshOffline() {
 			if !now || cur.ID != s.ID {
 				return
 			}
+			prev := a.offline.GetUntracked()
+			prevLoaded := prev.Loaded && prev.SiteID == s.ID && !prev.Admin
 			st := offlineState{SiteID: s.ID, Tasks: list, Loaded: true}
 			if err != nil {
 				st.Tasks = nil
 				st.Err = errText(err)
 				st.Admin = openlist.Unauthorized(err)
-				if prev := a.offline.GetUntracked(); prev.SiteID == s.ID && !st.Admin {
+				if prev.SiteID == s.ID && !st.Admin {
 					st.Tasks = prev.Tasks
 				}
 			}
 			a.offline.Set(st)
-			if st.Loaded && !st.Admin {
-				a.notifyOfflineOutcomes(st.Tasks)
+			if err == nil && st.Loaded && !st.Admin {
+				a.notifyOfflineOutcomes(s.ID, st.Tasks, prevLoaded)
 			}
 		})
 }
@@ -236,10 +246,56 @@ func offlineStatus(cx *core.Scope, t openlist.OfflineTask) string {
 	return s
 }
 
+// offlineTaskName turns OpenList's server-formatted Markdown links such as
+// "transfer [](/downloads/.../settings) to [/local](/)" into plain readable
+// text ("transfer settings to /local").
+func offlineTaskName(name string) string {
+	var b strings.Builder
+	for i := 0; i < len(name); {
+		if name[i] != '[' {
+			b.WriteByte(name[i])
+			i++
+			continue
+		}
+		closeBracket := strings.IndexByte(name[i+1:], ']')
+		if closeBracket < 0 {
+			b.WriteString(name[i:])
+			break
+		}
+		closeBracket += i + 1
+		if closeBracket+1 >= len(name) || name[closeBracket+1] != '(' {
+			b.WriteString(name[i : closeBracket+1])
+			i = closeBracket + 1
+			continue
+		}
+		closeParen := strings.IndexByte(name[closeBracket+2:], ')')
+		if closeParen < 0 {
+			b.WriteString(name[i:])
+			break
+		}
+		closeParen += closeBracket + 2
+		label := strings.TrimSpace(name[i+1 : closeBracket])
+		target := strings.TrimSpace(name[closeBracket+2 : closeParen])
+		if label != "" {
+			b.WriteString(label)
+		} else if target != "" {
+			cleaned := strings.TrimRight(strings.SplitN(target, "?", 2)[0], "/")
+			if base := path.Base(cleaned); base != "" && base != "." && base != "/" {
+				b.WriteString(base)
+			} else {
+				b.WriteString(target)
+			}
+		}
+		i = closeParen + 1
+	}
+	return b.String()
+}
+
 // offlineCard is one offline task.
 func (a *App) offlineCard(cx *core.Scope, task func() openlist.OfflineTask) core.Node {
 	th := theme.Of(cx)
 	t0 := task()
+	title := offlineTaskName(t0.Name)
 	glyph := lucide.CloudDownload
 	if t0.Transfer {
 		glyph = lucide.HardDriveUpload
@@ -255,7 +311,7 @@ func (a *App) offlineCard(cx *core.Scope, task func() openlist.OfflineTask) core
 		return c.Muted()
 	}
 	bar := core.Show{When: func() bool { return !task().Finished() }, Then: func(cx *core.Scope) core.Node {
-		return ui.Progress{Value: func() float32 { return float32(task().Progress) / 100 }, Label: t0.Name}
+		return ui.Progress{Value: func() float32 { return float32(task().Progress) }, Label: title}
 	}}
 	act := func(svg func() *core.SVG, label, action string) core.Node {
 		return ui.IconButton{Icon: svg, Label: label, OnPress: func() { a.offlineAction(task(), action) }, Size: 36, IconSize: 18}
@@ -268,14 +324,14 @@ func (a *App) offlineCard(cx *core.Scope, task func() openlist.OfflineTask) core
 			Then: func(cx *core.Scope) core.Node { return act(lucide.X, locales.CancelTask(cx), "cancel") },
 			Else: func(cx *core.Scope) core.Node { return act(lucide.Trash, locales.RemoveRecord(cx), "delete") }},
 	}}
-	return core.View{Role: core.RoleGroup, Label: t0.Name, TestID: "offline-task",
+	return core.View{Role: core.RoleGroup, Label: title, TestID: "offline-task",
 		Style:     core.Style{Gap: 8, Padding: core.All(12), BorderWidth: 1, CornerRadius: theme.RadiusMD, BorderCurve: core.BorderCurveContinuous},
 		StyleFunc: cardStyle(cx, theme.RadiusMD),
 		Children: []core.Node{
 			row(12,
 				tile(cx, glyph, "", 36, 10),
 				core.View{Style: fillStyle.Merge(core.Style{Gap: 2}), Children: []core.Node{
-					core.Text{ContentFunc: func() string { return task().Name }, MaxLines: 2, EllipsizeMode: core.EllipsizeTail, Style: theme.TypeBody,
+					core.Text{ContentFunc: func() string { return offlineTaskName(task().Name) }, MaxLines: 2, EllipsizeMode: core.EllipsizeTail, Style: theme.TypeBody,
 						StyleFunc: func() core.Style { return core.Style{Color: th.Text()} }},
 					core.Text{ContentFunc: func() string { return offlineStatus(cx, task()) }, MaxLines: 3, EllipsizeMode: core.EllipsizeTail, Style: theme.TypeCaption,
 						StyleFunc: func() core.Style { return core.Style{Color: statusColor(th)} }},

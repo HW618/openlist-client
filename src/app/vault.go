@@ -157,7 +157,10 @@ func (v *vault) Preload(ids []string, done func()) {
 			tok, ok, err := v.backend.Get(id)
 			if err != nil {
 				v.fail(err)
-				break
+				if errors.Is(err, core.ErrSecretsUnavailable) {
+					break
+				}
+				continue
 			}
 			if ok && tok != "" {
 				found[id] = tok
@@ -272,6 +275,12 @@ func (a *App) preloadTokens() {
 				a.logins.Update(func(n int) int { return n + 1 })
 				a.ready.Set(true)
 			})
+			if a.readyCh != nil {
+				close(a.readyCh)
+			}
+			if a.tab.GetUntracked() == tabTransfers || a.prefs.GetUntracked().NotifyMaster() {
+				a.pollOffline()
+			}
 		})
 	})
 }

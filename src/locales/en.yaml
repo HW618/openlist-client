@@ -10,6 +10,7 @@ tabLabel: Main navigation
 
 # Files page: header
 siteSwitchLabel: Switch OpenList site
+headerAddSite: "+ Add site"
 newOrUploadLabel: New or upload
 refreshDirLabel: Refresh this folder
 noSiteName: No site
@@ -21,6 +22,7 @@ clearSearchLabel: Clear search
 scopeLabel: Search scope
 scopeCurrent: This folder
 scopeGlobal: Everywhere
+parentDirLabel: Back to parent folder
 sortName: Name
 sortSize: Size
 sortDate: Date
@@ -236,20 +238,21 @@ groupAppearance: Appearance and browsing
 groupNotifications: Notifications
 groupPaths: Folders and downloads
 groupAbout: Storage and about
-notifyMaster: Task completion notifications
-notifyMasterDesc: System alerts when uploads, downloads or offline tasks finish or fail
-notifySuccess: Notify on success
-notifySuccessDesc: Alert when a task completes; several are merged into one
-notifyFailure: Notify on failure
-notifyFailureDesc: Alert when a task fails
-notifyLimitsTitle: Platform limits
-notifyLimitsDesc: If the system kills the app, transfers stop and there is no notification. Offline downloads finished on the server while the app is not running also produce none. Linux and the web only show notifications from this run. On Windows, tapping a notification needs an installed build.
-notifyDownloadDone: "{count, plural, one {# file downloaded} other {# files downloaded}}"
-notifyUploadDone: "{count, plural, one {# file uploaded} other {# files uploaded}}"
-notifyTransferBoth: "{count, plural, one {# transfer finished} other {# transfers finished}}"
-notifyTransferFailed: "{count, plural, one {# transfer failed} other {# transfers failed}}"
-notifyOfflineDone: "{count, plural, one {# offline download finished} other {# offline downloads finished}}"
-notifyOfflineFailed: "{count, plural, one {# offline download failed} other {# offline downloads failed}}"
+notifyMaster: Enable notifications
+notifyMasterDesc: Live progress in mobile notifications while transferring, and alerts when tasks succeed or fail; many alerts collapse into one
+notifyProgressDownloadTitle: "Downloading: {name}"
+notifyProgressUploadTitle: "Uploading: {name}"
+notifyProgressMultiTitle: "{count, plural, one {# transfer in progress} other {# transfers in progress}}"
+notifyProgressMultiBody: "{percent}% · {done} / {total}"
+notifyItemDownloadDone: "Downloaded: {name}"
+notifyItemUploadDone: "Uploaded: {name}"
+notifyItemTransferFailed: "Transfer failed: {name}"
+notifyItemOfflineDone: "Offline done: {name}"
+notifyItemOfflineFailed: "Offline failed: {name}"
+notifySummaryDone: "{count, plural, one {# task completed} other {# tasks completed}}"
+notifySummaryFailed: "{count, plural, one {# task failed} other {# tasks failed}}"
+notifySummaryMixed: "{total, plural, one {# task finished} other {# tasks finished}} ({ok} done, {fail} failed)"
+notifySummaryCollapsedBody: Too many alerts collapsed. Tap to open Transfers
 notifyOpenTransfers: Tap to open Transfers
 siteLatency: "{latency}"
 siteLatencyLine: "{url} · latency {latency}"
@@ -367,3 +370,27 @@ toastSiteNeedLogin: "{name}: not signed in, or the sign-in expired. Sign in agai
 toastSiteDisabled: "{name}: the account {user} is disabled"
 toastSiteFailReason: "{name}: can't connect ({reason})"
 siteStatusLine: "{url} · {status}"
+
+# Transfers inline notice banner
+transferBannerProgressHeading: OpenList Client · Transfer progress
+transferBannerSummaryHeading: OpenList Client · Transfer summary
+transferBannerSummaryBody: "Downloaded {downloaded} · Uploaded {uploaded} · Tap to dismiss"
+transferBannerCloseLabel: Dismiss transfer summary
+
+# Desktop background running & tray
+groupDesktop: Background running
+closeToTrayTitle: Minimize to tray when closing window
+closeToTrayDesc: Keep transfers running in the system tray after closing the main window; click the tray icon to reopen
+toastCloseToTrayOn: Closing the window will minimize to the system tray
+toastCloseToTrayOff: Closing the window will quit (confirming if transfers are active)
+trayTooltipIdle: OpenList · No active transfers
+trayTooltipActive: "{count, plural, one {OpenList · # active transfer} other {OpenList · # active transfers}} ({percent}%)"
+trayMenuIdle: No active transfers
+trayMenuActive: "{count, plural, one {# active transfer} other {# active transfers}} · {percent}%"
+trayShowWindow: Show window
+trayOpenTransfers: Open transfers
+trayQuit: Quit OpenList
+quitConfirmTitle: Transfers still in progress
+quitConfirmBody: "{count, plural, one {# transfer is still running. Unfinished downloads keep their partial progress and can resume next time.} other {# transfers are still running. Unfinished downloads keep their partial progress and can resume next time.}}"
+quitConfirmCancel: Keep transferring
+quitConfirmAction: Quit app

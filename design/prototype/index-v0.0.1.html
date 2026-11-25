@@ -6,17 +6,23 @@
     Files 标签 / 面包屑 / 排序 / 视图切换 ... src/app/files.go
     Transfers 标签 / 离线下载区块 .......... src/app/transfers.go · src/app/offline.go（离线区块仅管理员可见）
     Settings 标签 / 站点列表（默认只显示当前站点，右侧箭头展开，最高 320 滚动） ... src/app/settings.go
-    Settings · 通知开关组 .................... src/app/settings.go · 通知偏好（待实现，ROADMAP §1）
-    系统通知点击跳转 ......................... cx.OnNotificationPress → 传输 / 离线下载
+    Settings · 站点状态与路径显示（状态支持换行；目录路径独立一行完整展示） .......... src/app/settings.go
+    Settings · 通知开关（仅保留单一开启开关；进行中显示进度，成功与失败均通知；条目较多时折叠汇总） ... src/app/settings.go · src/app/notifications.go
+    Settings · 后台运行（仅桌面端显示，关闭窗口时最小化到托盘开关） ... src/app/settings.go · src/app/desktop.go
+    桌面端系统托盘菜单与活跃传输退出确认 ............................ src/app/desktop.go · src/app/sheets.go
+    系统通知进度与点击跳转 ................. Android cx.ShowNotification 单条静音进度 / iOS widget.StartActivity（灵动岛）+ cx.OnNotificationPress → 传输 / 离线下载
     各类底部面板 / 对话框 ................... src/app/sheets.go（宽 ≥ 640 为对话框，否则为底部面板）
     权限对话框 ............................... src/app/permissions.go · src/internal/access
-    通知权限被拒引导 ......................... src/app/permissions.go（通知类，待实现）
+    通知权限引导与被拒引导 ................... src/app/permissions.go
     预览 / 悬浮按钮 .......................... src/app/preview.go · src/app/fabview.go
 
   演示参数（URL query）
     ?platform=desktop|web|android   切换“本机默认下载位置”的平台变体
     ?perm=folder,network,server,browser,keychain,notifications  启动即弹出对应的权限对话框
-    ?notify=1                       演示一条合并后的任务完成通知（可点击跳到传输）
+    ?notify=1                       演示一条折叠汇总后的任务通知（可点击跳到传输）
+    ?notify=progress                演示一条正在进行的任务进度通知（实时更新进度条，可点击跳到传输）
+    ?tray=1                         演示桌面端系统托盘菜单（含实时传输进度、显示窗口、打开传输、退出）
+    ?quit=1                         演示活跃传输时的「仍有传输正在进行」退出确认对话框
     （默认）首次启动引导开启通知权限：弹出「允许通知」对话框，点「允许通知」再请求系统权限
 
   布局沿用 OD-LAYOUT-PRIMITIVES v1，样式沿用 Apple Design System 令牌与平台中性手机外壳。
@@ -932,6 +938,36 @@
       overscroll-behavior: contain;
       padding-right: 6px;
     }
+    .setting-row-stacked {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 8px;
+    }
+    .setting-row-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--space-3);
+      min-width: 0;
+    }
+    .setting-path-pill {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      width: 100%;
+      min-width: 0;
+      padding: 8px 10px;
+      border-radius: var(--radius-xs);
+      border: 1px solid var(--border-soft);
+      background: var(--surface);
+      color: var(--muted);
+      font-size: var(--text-xs);
+      line-height: 1.4;
+      text-align: left;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
     .setting-value-btn {
       max-width: 52%;
       min-width: 0;
@@ -1293,12 +1329,24 @@
       color: inherit;
     }
     .sys-notify[hidden] { display: none !important; }
+    .sys-notify-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
     .sys-notify-app {
       font-size: 11px;
       font-weight: 600;
       color: var(--muted);
       letter-spacing: 0.02em;
       text-transform: uppercase;
+    }
+    .sys-notify-status {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--accent);
+      font-variant-numeric: tabular-nums;
     }
     .sys-notify-title {
       font-size: 14px;
@@ -1310,9 +1358,157 @@
       color: var(--muted);
       line-height: 1.4;
     }
+    .sys-notify-progress {
+      margin-top: 6px;
+      height: 4px;
+      border-radius: 999px;
+      background: var(--border-soft);
+      overflow: hidden;
+    }
+    .sys-notify-progress[hidden] { display: none !important; }
+    .sys-notify-progress-bar {
+      height: 100%;
+      width: 0%;
+      border-radius: 999px;
+      background: var(--accent);
+      transition: width 0.25s ease;
+    }
     .setting-row.is-disabled {
       opacity: 0.45;
       pointer-events: none;
+    }
+
+    /* Desktop System Chrome, Tray Menu & Minimized-to-Tray Stage */
+    .phone-frame.has-desktop-bar .phone-content,
+    .phone-frame.has-desktop-bar .overlay-screen,
+    .phone-frame.has-desktop-bar .sheet-backdrop { top: 32px; }
+    .phone-frame.has-desktop-bar .overlay-screen { height: auto; }
+    .desktop-bar {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 32px;
+      z-index: 45;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 12px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border-soft);
+      font-size: 12px;
+      color: var(--fg-2);
+    }
+    .desktop-bar[hidden],
+    .tray-menu[hidden],
+    .tray-hidden-stage[hidden],
+    .tray-badge[hidden] { display: none !important; }
+    .desktop-win-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .desktop-chrome-btn {
+      padding: 3px 8px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--fg-2);
+      background: var(--bg);
+      border: 1px solid var(--border-soft);
+      line-height: 1.3;
+    }
+    .desktop-chrome-btn:hover { background: var(--surface-warm); }
+    .desktop-chrome-btn.danger { color: var(--danger); }
+    .tray-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 3px 8px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--fg);
+      background: var(--bg);
+      border: 1px solid var(--border-soft);
+    }
+    .tray-btn:hover { background: var(--surface-warm); }
+    .tray-badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 1px 5px;
+      border-radius: 999px;
+      font-size: 10px;
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+      color: var(--accent-on);
+      background: var(--accent);
+    }
+    .tray-menu {
+      position: absolute;
+      top: 36px;
+      right: 10px;
+      width: 228px;
+      z-index: 50;
+      padding: 6px;
+      border-radius: 12px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      box-shadow: var(--elev-raised);
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .tray-menu-status {
+      padding: 6px 10px;
+      font-size: 12px;
+      color: var(--muted);
+      font-variant-numeric: tabular-nums;
+      line-height: 1.35;
+    }
+    .tray-menu-sep {
+      height: 1px;
+      background: var(--border-soft);
+      margin: 4px 6px;
+    }
+    .tray-menu-item {
+      width: 100%;
+      text-align: left;
+      padding: 7px 10px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--fg);
+      transition: background-color var(--motion-fast) var(--ease-standard);
+    }
+    .tray-menu-item:hover { background: var(--surface); }
+    .tray-menu-item.danger { color: var(--danger); }
+    .tray-hidden-stage {
+      position: absolute;
+      top: 32px;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      z-index: 35;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      background: var(--surface);
+    }
+    .tray-hidden-card {
+      width: 100%;
+      max-width: 340px;
+      padding: 22px 20px;
+      border-radius: var(--radius-md);
+      background: var(--bg);
+      border: 1px solid var(--border-soft);
+      box-shadow: var(--elev-raised);
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
     }
 
     /* Selection Mode & Checkboxes */
@@ -1688,37 +1884,23 @@
                 <div class="group-card">
                   <div class="setting-row">
                     <div>
-                      <div class="setting-title">任务完成通知</div>
-                      <div class="setting-desc">上传、下载与离线任务完成或失败时发出系统通知</div>
+                      <div class="setting-title">开启通知</div>
+                      <div class="setting-desc">传输进行中在通知栏显示实时进度，完成或失败时发出提醒；条目太多时自动折叠汇总</div>
                     </div>
-                    <button type="button" class="switch" id="toggleNotifyMaster" role="switch" aria-checked="true" aria-label="任务完成通知"></button>
+                    <button type="button" class="switch" id="toggleNotifyMaster" role="switch" aria-checked="true" aria-label="开启通知"></button>
                   </div>
-                  <div class="setting-row" id="rowNotifySuccess">
+                </div>
+              </div>
+
+              <div class="settings-group" id="settingsDesktopGroup">
+                <h2 class="group-label">后台运行</h2>
+                <div class="group-card">
+                  <div class="setting-row">
                     <div>
-                      <div class="setting-title">成功时通知</div>
-                      <div class="setting-desc">任务成功完成时提醒；多条合并为一条</div>
+                      <div class="setting-title">关闭窗口时最小化到托盘</div>
+                      <div class="setting-desc">关闭主窗口后在系统托盘继续传输；点击托盘图标可重新打开</div>
                     </div>
-                    <button type="button" class="switch" id="toggleNotifySuccess" role="switch" aria-checked="true" aria-label="成功时通知"></button>
-                  </div>
-                  <div class="setting-row" id="rowNotifyFailure">
-                    <div>
-                      <div class="setting-title">失败时通知</div>
-                      <div class="setting-desc">任务失败时提醒</div>
-                    </div>
-                    <button type="button" class="switch" id="toggleNotifyFailure" role="switch" aria-checked="true" aria-label="失败时通知"></button>
-                  </div>
-                  <div class="setting-row" style="align-items:flex-start">
-                    <div>
-                      <div class="setting-title">平台限制</div>
-                      <div class="setting-desc" id="notifyLimitsDesc">应用被系统杀掉后传输会中断，也就没有通知；离线下载在服务器完成时，应用未运行也收不到。Linux 与网页版只显示本次运行发出的通知。Windows 点击通知需通过安装包安装过本应用。</div>
-                    </div>
-                  </div>
-                  <div class="setting-row" id="rowNotifyDemo">
-                    <div>
-                      <div class="setting-title">演示通知</div>
-                      <div class="setting-desc">弹出一条合并通知，点击后跳到「传输」</div>
-                    </div>
-                    <button type="button" class="text-btn" id="btnDemoNotify">演示</button>
+                    <button type="button" class="switch" id="toggleCloseToTray" role="switch" aria-checked="true" aria-label="关闭窗口时最小化到托盘"></button>
                   </div>
                 </div>
               </div>
@@ -1726,36 +1908,47 @@
               <div class="settings-group">
                 <h2 class="group-label">目录与下载路径 <span id="settingsSiteScope" style="font-weight:500; color:var(--accent); text-transform:none; letter-spacing:0"></span></h2>
                 <div class="group-card">
-                  <div class="setting-row">
-                    <div class="od-fill" style="min-width:0">
-                      <div class="setting-title">文件页默认目录</div>
-                      <div class="setting-desc">打开应用或切换站点时默认进入的目录</div>
+                  <div class="setting-row setting-row-stacked">
+                    <div class="setting-row-head">
+                      <div class="od-fill" style="min-width:0">
+                        <div class="setting-title">文件页默认目录</div>
+                        <div class="setting-desc">打开应用或切换站点时默认进入的目录</div>
+                      </div>
+                      <button type="button" class="text-btn od-fixed" data-trigger-for="btnPrefDefaultFilesDir">更改</button>
                     </div>
-                    <button type="button" class="tool-chip setting-value-btn" id="btnPrefDefaultFilesDir" title="设置文件页默认目录">
-                      <span class="od-truncate" id="prefDefaultFilesDirLabel">根目录</span>
+                    <button type="button" class="setting-path-pill" id="btnPrefDefaultFilesDir" title="设置文件页默认目录">
+                      <span style="min-width:0; overflow-wrap:anywhere" id="prefDefaultFilesDirLabel">根目录</span>
                       <svg class="od-icon" style="--od-icon-size:14px; flex:none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
                     </button>
                   </div>
-                  <div class="setting-row">
-                    <div class="od-fill" style="min-width:0">
-                      <div class="setting-title">离线下载默认文件夹</div>
-                      <div class="setting-desc">在根目录发起离线下载时的默认保存位置</div>
+                  <div class="setting-row setting-row-stacked">
+                    <div class="setting-row-head">
+                      <div class="od-fill" style="min-width:0">
+                        <div class="setting-title">离线下载默认文件夹</div>
+                        <div class="setting-desc">在根目录发起离线下载时的默认保存位置</div>
+                      </div>
+                      <button type="button" class="text-btn od-fixed" data-trigger-for="btnPrefDefaultOfflineDir">更改</button>
                     </div>
-                    <button type="button" class="tool-chip setting-value-btn" id="btnPrefDefaultOfflineDir" title="设置离线下载默认文件夹">
-                      <span class="od-truncate" id="prefDefaultOfflineDirLabel">本地存储</span>
+                    <button type="button" class="setting-path-pill" id="btnPrefDefaultOfflineDir" title="设置离线下载默认文件夹">
+                      <span style="min-width:0; overflow-wrap:anywhere" id="prefDefaultOfflineDirLabel">本地存储</span>
                       <svg class="od-icon" style="--od-icon-size:14px; flex:none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
                     </button>
                   </div>
-                  <div class="setting-row">
-                    <div class="od-fill" style="min-width:0">
-                      <div class="setting-title">本机默认下载位置</div>
-                      <div class="setting-desc">默认为系统下载文件夹，点击更改</div>
+                  <div class="setting-row setting-row-stacked">
+                    <div class="setting-row-head">
+                      <div class="od-fill" style="min-width:0">
+                        <div class="setting-title">本机默认下载位置</div>
+                        <div class="setting-desc">默认为系统下载文件夹，点击更改</div>
+                      </div>
+                      <div class="od-row od-fixed" style="--od-gap:6px">
+                        <button type="button" class="text-btn muted" id="btnClearLocalDir" hidden>清除</button>
+                        <button type="button" class="text-btn" data-trigger-for="btnPrefLocalDownloadDir">更改</button>
+                      </div>
                     </div>
-                    <button type="button" class="tool-chip setting-value-btn" id="btnPrefLocalDownloadDir" title="设置本机默认下载位置">
-                      <span class="od-truncate" id="prefLocalDownloadDirLabel">~/Downloads/OpenList</span>
+                    <button type="button" class="setting-path-pill" id="btnPrefLocalDownloadDir" title="设置本机默认下载位置">
+                      <span style="min-width:0; overflow-wrap:anywhere" id="prefLocalDownloadDirLabel">~/Downloads/OpenList</span>
                       <svg class="od-icon" style="--od-icon-size:14px; flex:none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
                     </button>
-                    <button type="button" class="text-btn muted" id="btnClearLocalDir" hidden>清除</button>
                   </div>
                 </div>
                 <input type="file" id="inpLocalDirPicker" webkitdirectory directory multiple hidden />
@@ -1892,6 +2085,40 @@
         </footer>
       </section>
 
+      <!-- ─── Desktop System Bar & Tray Demo (platform=desktop) ─── -->
+      <div class="desktop-bar" id="desktopBar" hidden>
+        <div class="desktop-win-actions">
+          <span style="font-weight:600; color:var(--fg)">桌面窗口</span>
+          <button type="button" class="desktop-chrome-btn" id="btnDemoWinClose">关闭窗口</button>
+          <button type="button" class="desktop-chrome-btn danger" id="btnDemoQuit">退出</button>
+        </div>
+        <button type="button" class="tray-btn" id="btnTrayIcon" aria-haspopup="menu" aria-expanded="false" aria-label="OpenList 系统托盘">
+          <svg class="od-icon" style="--od-icon-size:14px; color:var(--accent)" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="20" height="8" x="2" y="2" rx="2"/><rect width="20" height="8" x="2" y="14" rx="2"/><path d="M6 6h.01M6 18h.01"/></svg>
+          <span>OpenList</span>
+          <span class="tray-badge" id="trayBadge" hidden>↓ 0</span>
+        </button>
+      </div>
+
+      <div class="tray-menu" id="trayMenu" role="menu" aria-label="系统托盘菜单" hidden>
+        <div class="tray-menu-status" id="trayMenuStatus">暂无进行中的传输</div>
+        <div class="tray-menu-sep" role="separator"></div>
+        <button type="button" class="tray-menu-item" id="btnTrayShowWindow" role="menuitem">显示主窗口</button>
+        <button type="button" class="tray-menu-item" id="btnTrayOpenTransfers" role="menuitem">打开传输队列</button>
+        <div class="tray-menu-sep" role="separator"></div>
+        <button type="button" class="tray-menu-item danger" id="btnTrayQuit" role="menuitem">退出 OpenList</button>
+      </div>
+
+      <div class="tray-hidden-stage" id="trayHiddenStage" hidden>
+        <div class="tray-hidden-card">
+          <span class="tile" style="width:44px; height:44px; border-radius:12px; color:var(--accent)">
+            <svg class="od-icon" style="--od-icon-size:22px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="20" height="8" x="2" y="2" rx="2"/><rect width="20" height="8" x="2" y="14" rx="2"/><path d="M6 6h.01M6 18h.01"/></svg>
+          </span>
+          <div style="font-size:16px; font-weight:600; color:var(--fg)">窗口已最小化到系统托盘</div>
+          <p id="trayHiddenDesc" style="margin:0; font-size:13px; color:var(--muted); line-height:1.5">正在后台继续传输；点击右上角托盘图标可随时恢复窗口</p>
+          <button type="button" class="btn-primary" id="btnRestoreFromTray" style="width:100%; margin-top:4px">重新打开主窗口</button>
+        </div>
+      </div>
+
       <!-- ─── Bottom Sheet Backdrop ─── -->
       <div class="sheet-backdrop" id="sheetBackdrop" hidden>
         <div class="sheet-panel" id="sheetPanel" role="dialog" aria-modal="true" aria-labelledby="sheetTitle">
@@ -1909,11 +2136,17 @@
       <!-- ─── Toast Feedback ─── -->
       <div class="toast" id="toastEl" role="status" aria-live="polite" hidden></div>
 
-      <!-- ─── System notification (ROADMAP §1 demo) ─── -->
+      <!-- ─── System notification (ROADMAP §1 + ongoing progress demo) ─── -->
       <button type="button" class="sys-notify" id="sysNotifyEl" hidden aria-label="打开传输页">
-        <span class="sys-notify-app">OpenList</span>
+        <div class="sys-notify-head">
+          <span class="sys-notify-app">OpenList</span>
+          <span class="sys-notify-status" id="sysNotifyStatus" hidden></span>
+        </div>
         <span class="sys-notify-title" id="sysNotifyTitle">3 个文件已下载</span>
         <span class="sys-notify-body" id="sysNotifyBody">点击查看传输记录</span>
+        <div class="sys-notify-progress" id="sysNotifyProgress" hidden>
+          <div class="sys-notify-progress-bar" id="sysNotifyProgressBar"></div>
+        </div>
       </button>
 
       <!-- ─── System Chrome (Status Bar, Camera, Home Indicator) ─── -->
@@ -1959,12 +2192,14 @@
         offlineDraft: { url: '', tool: 'aria2' },
         dirPickerMode: null,
         dirPickerBrowsePathIds: ['root'],
-        // 通知偏好（ROADMAP §1）：总开关、成功/失败默认开；首次启动引导开启权限
+        // 通知偏好：仅保留开启开关；开启后成功和失败都通知，条目过多时折叠汇总
         notifyMaster: true,
-        notifySuccess: true,
-        notifyFailure: true,
         notifyPermission: 'not-asked', // 'not-asked' | 'granted' | 'denied'
         notifyAsked: false,
+        // 桌面端后台运行（仅 desktop 生效）
+        closeToTray: true,
+        windowHiddenInTray: false,
+        trayMenuOpen: false,
 
         sites: [
           {
@@ -2136,7 +2371,21 @@
       const $ = (sel) => document.querySelector(sel);
       const $$ = (sel) => document.querySelectorAll(sel);
 
+      const phoneFrame = $('.phone-frame');
       const phoneScreen = $('#phoneScreen');
+      const desktopBar = $('#desktopBar');
+      const btnDemoWinClose = $('#btnDemoWinClose');
+      const btnDemoQuit = $('#btnDemoQuit');
+      const btnTrayIcon = $('#btnTrayIcon');
+      const trayBadge = $('#trayBadge');
+      const trayMenu = $('#trayMenu');
+      const trayMenuStatus = $('#trayMenuStatus');
+      const btnTrayShowWindow = $('#btnTrayShowWindow');
+      const btnTrayOpenTransfers = $('#btnTrayOpenTransfers');
+      const btnTrayQuit = $('#btnTrayQuit');
+      const trayHiddenStage = $('#trayHiddenStage');
+      const trayHiddenDesc = $('#trayHiddenDesc');
+      const btnRestoreFromTray = $('#btnRestoreFromTray');
       const headerFiles = $('#headerFiles');
       const headerTransfers = $('#headerTransfers');
       const headerSettings = $('#headerSettings');
@@ -2170,15 +2419,16 @@
       const siteListCard = $('#siteListCard');
       const toggleDarkMode = $('#toggleDarkMode');
       const toggleNotifyMaster = $('#toggleNotifyMaster');
-      const toggleNotifySuccess = $('#toggleNotifySuccess');
-      const toggleNotifyFailure = $('#toggleNotifyFailure');
-      const rowNotifySuccess = $('#rowNotifySuccess');
-      const rowNotifyFailure = $('#rowNotifyFailure');
-      const btnDemoNotify = $('#btnDemoNotify');
+      const settingsDesktopGroup = $('#settingsDesktopGroup');
+      const toggleCloseToTray = $('#toggleCloseToTray');
       const sysNotifyEl = $('#sysNotifyEl');
+      const sysNotifyStatus = $('#sysNotifyStatus');
       const sysNotifyTitle = $('#sysNotifyTitle');
       const sysNotifyBody = $('#sysNotifyBody');
+      const sysNotifyProgress = $('#sysNotifyProgress');
+      const sysNotifyProgressBar = $('#sysNotifyProgressBar');
       let sysNotifyTimer = null;
+      let sysNotifyOngoing = false;
       const btnClearLocalDir = $('#btnClearLocalDir');
       const prefDefaultFilesDirLabel = $('#prefDefaultFilesDirLabel');
       const prefDefaultOfflineDirLabel = $('#prefDefaultOfflineDirLabel');
@@ -2637,10 +2887,96 @@
       }
 
       /* ─── Render Transfers ─── */
+      function getActiveTransferSummary() {
+        const active = state.transfers.filter((t) => t.status === 'active');
+        const count = active.length;
+        const avgPct = count > 0 ? Math.round(active.reduce((sum, t) => sum + (t.progress || 0), 0) / count) : 0;
+        return { count, avgPct };
+      }
+
+      function setTrayMenuOpen(open) {
+        state.trayMenuOpen = !!open;
+        if (trayMenu) trayMenu.hidden = !state.trayMenuOpen;
+        if (btnTrayIcon) btnTrayIcon.setAttribute('aria-expanded', state.trayMenuOpen ? 'true' : 'false');
+      }
+
+      function syncDesktopTray() {
+        const isDesktop = state.platform === 'desktop';
+        if (phoneFrame) phoneFrame.classList.toggle('has-desktop-bar', isDesktop);
+        if (desktopBar) desktopBar.hidden = !isDesktop;
+        if (!isDesktop) {
+          setTrayMenuOpen(false);
+          if (trayHiddenStage) trayHiddenStage.hidden = true;
+          state.windowHiddenInTray = false;
+          return;
+        }
+        const { count, avgPct } = getActiveTransferSummary();
+        if (trayBadge) {
+          trayBadge.textContent = `↓ ${count}`;
+          trayBadge.hidden = count === 0;
+        }
+        if (btnTrayIcon) {
+          btnTrayIcon.title = count > 0
+            ? `OpenList · 正在传输 ${count} 个任务（${avgPct}%）`
+            : 'OpenList · 暂无进行中的传输';
+        }
+        if (trayMenuStatus) {
+          trayMenuStatus.textContent = count > 0
+            ? `正在传输 ${count} 个任务 · ${avgPct}%`
+            : '暂无进行中的传输';
+        }
+        if (trayHiddenDesc) {
+          trayHiddenDesc.textContent = count > 0
+            ? `正在后台继续传输 ${count} 个任务（${avgPct}%）；点击右上角托盘图标可随时恢复窗口`
+            : '窗口已在系统托盘常驻；点击右上角托盘图标可随时恢复窗口';
+        }
+      }
+
+      function restoreMainWindow(openTransfersTab) {
+        state.windowHiddenInTray = false;
+        if (trayHiddenStage) trayHiddenStage.hidden = true;
+        setTrayMenuOpen(false);
+        if (openTransfersTab) setActiveTab('transfers');
+      }
+
+      function openQuitConfirmSheet() {
+        restoreMainWindow(false);
+        const { count } = getActiveTransferSummary();
+        openSheet('仍有传输正在进行', sheetFrame(`
+          <p style="font-size:14px; color:var(--fg-2); line-height:1.55; margin:0">当前有 ${count} 个任务正在传输。退出后未完成的下载会保留断点，下次打开时可继续。</p>
+        `, `
+          <button type="button" class="btn-secondary" id="btnCancelQuit" style="flex:1">继续传输</button>
+          <button type="button" class="btn-danger" id="btnConfirmQuit" style="flex:1">退出应用</button>
+        `));
+      }
+
+      function requestDesktopQuit() {
+        setTrayMenuOpen(false);
+        if (getActiveTransferSummary().count > 0) {
+          openQuitConfirmSheet();
+          return;
+        }
+        showToast('已退出应用（原型）');
+      }
+
+      function requestDesktopClose() {
+        if (state.closeToTray) {
+          state.windowHiddenInTray = true;
+          closeSheet();
+          setTrayMenuOpen(false);
+          if (trayHiddenStage) trayHiddenStage.hidden = false;
+          syncDesktopTray();
+          showToast('已最小化到系统托盘，传输继续在后台运行');
+          return;
+        }
+        requestDesktopQuit();
+      }
+
       function updateTransferBadge() {
         const activeCount = state.transfers.filter((t) => t.status === 'active' || t.status === 'paused').length;
         transferBadge.textContent = String(activeCount);
         transferBadge.hidden = activeCount === 0;
+        syncDesktopTray();
       }
 
       /* ─── 离线下载任务（站点侧，/api/admin/task/offline_download*） ─── */
@@ -2812,7 +3148,7 @@
                 <span class="setting-title od-truncate">${escapeHtml(s.name)}</span>
                 ${isCurrent ? '<span class="driver-tag od-fixed">当前</span>' : ''}
               </div>
-              <div class="setting-desc od-truncate" style="margin-top:0">${escapeHtml(siteStatusLine(s))}</div>
+              <div class="setting-desc" style="margin-top:0; overflow-wrap:anywhere">${escapeHtml(siteStatusLine(s))}</div>
               <div class="site-actions">
                 <button type="button" class="mini-btn" data-site-test="${s.id}">测试</button>
                 ${needLogin ? `<button type="button" class="mini-btn" data-site-signin="${s.id}">登录</button>` : ''}
@@ -2879,10 +3215,8 @@
 
         const masterOn = !!state.notifyMaster;
         toggleNotifyMaster.setAttribute('aria-checked', masterOn ? 'true' : 'false');
-        toggleNotifySuccess.setAttribute('aria-checked', state.notifySuccess ? 'true' : 'false');
-        toggleNotifyFailure.setAttribute('aria-checked', state.notifyFailure ? 'true' : 'false');
-        rowNotifySuccess.classList.toggle('is-disabled', !masterOn);
-        rowNotifyFailure.classList.toggle('is-disabled', !masterOn);
+        if (settingsDesktopGroup) settingsDesktopGroup.hidden = state.platform !== 'desktop';
+        if (toggleCloseToTray) toggleCloseToTray.setAttribute('aria-checked', state.closeToTray ? 'true' : 'false');
       }
 
       /* ─── Preview Screen ─── */
@@ -3872,7 +4206,7 @@
         renderSettings();
       });
 
-      function showSysNotify(title, body, id) {
+      function showSysNotify(title, body, id, progress) {
         if (!state.notifyMaster) {
           showToast('已关闭任务完成通知');
           return;
@@ -3887,9 +4221,50 @@
         sysNotifyEl.dataset.notifyId = id || 'transfer:done';
         sysNotifyTitle.textContent = title;
         sysNotifyBody.textContent = body;
+        const hasProgress = typeof progress === 'number' && !Number.isNaN(progress);
+        sysNotifyOngoing = hasProgress;
+        if (hasProgress) {
+          const pct = Math.max(0, Math.min(100, Math.round(progress)));
+          sysNotifyStatus.textContent = `${pct}%`;
+          sysNotifyStatus.hidden = false;
+          sysNotifyProgressBar.style.width = `${pct}%`;
+          sysNotifyProgress.hidden = false;
+        } else {
+          sysNotifyStatus.hidden = true;
+          sysNotifyProgress.hidden = true;
+        }
         sysNotifyEl.hidden = false;
         clearTimeout(sysNotifyTimer);
-        sysNotifyTimer = setTimeout(() => { sysNotifyEl.hidden = true; }, 6000);
+        if (!hasProgress) {
+          sysNotifyTimer = setTimeout(() => { sysNotifyEl.hidden = true; }, 6000);
+        }
+      }
+
+      function syncOngoingNotify() {
+        if (!sysNotifyOngoing) return;
+        if (!state.notifyMaster) {
+          sysNotifyOngoing = false;
+          sysNotifyEl.hidden = true;
+          return;
+        }
+        const active = state.transfers.filter((t) => t.status === 'active');
+        if (active.length === 0) {
+          if (sysNotifyOngoing) {
+            sysNotifyOngoing = false;
+            showSysNotify('传输已完成', '点击查看传输记录', 'transfer:done');
+          }
+          return;
+        }
+        const totalSize = active.reduce((s, t) => s + (t.size || 0), 0);
+        const doneSize = active.reduce((s, t) => s + Math.round(((t.progress || 0) / 100) * (t.size || 0)), 0);
+        const pct = totalSize > 0 ? Math.round((doneSize / totalSize) * 100) : Math.round(active[0].progress || 0);
+        if (active.length === 1) {
+          const t = active[0];
+          const verb = t.dir === 'upload' ? '正在上传' : '正在下载';
+          showSysNotify(`${verb}：${t.name}`, `${pct}% · ${formatBytes(doneSize)} / ${formatBytes(totalSize)} · ${t.speed}`, 'transfer:progress', pct);
+        } else {
+          showSysNotify(`正在进行 ${active.length} 个传输任务`, `已完成 ${pct}% · ${formatBytes(doneSize)} / ${formatBytes(totalSize)}`, 'transfer:progress', pct);
+        }
       }
 
       function pressSysNotify() {
@@ -3912,24 +4287,38 @@
         }
         renderSettings();
       });
-      toggleNotifySuccess.addEventListener('click', () => {
-        if (!state.notifyMaster) return;
-        state.notifySuccess = !state.notifySuccess;
-        renderSettings();
-      });
-      toggleNotifyFailure.addEventListener('click', () => {
-        if (!state.notifyMaster) return;
-        state.notifyFailure = !state.notifyFailure;
-        renderSettings();
-      });
-      btnDemoNotify.addEventListener('click', () => {
-        if (state.notifySuccess) {
-          showSysNotify('3 个文件已下载', '点击查看传输记录', 'transfer:done');
-        } else {
-          showToast('已关闭成功通知');
-        }
+      if (toggleCloseToTray) {
+        toggleCloseToTray.addEventListener('click', () => {
+          state.closeToTray = !state.closeToTray;
+          renderSettings();
+          showToast(state.closeToTray ? '关闭窗口将最小化到系统托盘' : '关闭窗口将直接退出（有活跃传输时先确认）');
+        });
+      }
+      if (btnDemoWinClose) btnDemoWinClose.addEventListener('click', requestDesktopClose);
+      if (btnDemoQuit) btnDemoQuit.addEventListener('click', requestDesktopQuit);
+      if (btnTrayIcon) {
+        btnTrayIcon.addEventListener('click', (e) => {
+          e.stopPropagation();
+          setTrayMenuOpen(!state.trayMenuOpen);
+        });
+      }
+      if (btnTrayShowWindow) btnTrayShowWindow.addEventListener('click', () => restoreMainWindow(false));
+      if (btnTrayOpenTransfers) btnTrayOpenTransfers.addEventListener('click', () => restoreMainWindow(true));
+      if (btnTrayQuit) btnTrayQuit.addEventListener('click', requestDesktopQuit);
+      if (btnRestoreFromTray) btnRestoreFromTray.addEventListener('click', () => restoreMainWindow(false));
+      document.addEventListener('click', (e) => {
+        if (!state.trayMenuOpen) return;
+        if ((trayMenu && trayMenu.contains(e.target)) || (btnTrayIcon && btnTrayIcon.contains(e.target))) return;
+        setTrayMenuOpen(false);
       });
       sysNotifyEl.addEventListener('click', pressSysNotify);
+
+      $$('[data-trigger-for]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const target = document.getElementById(btn.dataset.triggerFor);
+          if (target) target.click();
+        });
+      });
 
       $$('[data-pref-view]').forEach((btn) => {
         btn.addEventListener('click', () => {
@@ -4348,8 +4737,13 @@
           return;
         }
 
-        if (e.target.id === 'btnCancelRename' || e.target.id === 'btnCancelDel') {
+        if (e.target.id === 'btnCancelRename' || e.target.id === 'btnCancelDel' || e.target.id === 'btnCancelQuit') {
           closeSheet();
+          return;
+        }
+        if (e.target.id === 'btnConfirmQuit') {
+          closeSheet();
+          showToast('已保存断点并退出应用（原型）');
           return;
         }
         if (e.target.id === 'btnSaveRename') {
@@ -4421,6 +4815,7 @@
         if (changed) {
           updateTransferBadge();
           if (state.activeTab === 'transfers') renderTransfers();
+          syncOngoingNotify();
         }
       }, 1500);
 
@@ -4447,11 +4842,23 @@
         const issues = permParam.split(',').map((k) => samples[k]).filter(Boolean);
         if (issues.length) openPermissionSheet(issues);
       }
-      if (bootParams.get('notify') === '1') {
-        setTimeout(() => showSysNotify('3 个文件已下载', '点击查看传输记录', 'transfer:done'), 400);
+      if (bootParams.get('tray') === '1') {
+        state.platform = 'desktop';
+        syncDesktopTray();
+        setTrayMenuOpen(true);
+      } else if (bootParams.get('quit') === '1') {
+        state.platform = 'desktop';
+        syncDesktopTray();
+        openQuitConfirmSheet();
       }
-      // 首次启动：引导开启通知（不必等到第一个任务完成）。?perm= 已含 notifications 时不重复弹出。
-      if (!state.notifyAsked && !permParam) {
+      if (bootParams.get('notify') === '1') {
+        setTimeout(() => showSysNotify('4 个任务已结束（成功 3，失败 1）', '条目较多已折叠，点击查看传输记录', 'transfer:summary'), 400);
+      } else if (bootParams.get('notify') === 'progress') {
+        sysNotifyOngoing = true;
+        setTimeout(syncOngoingNotify, 400);
+      }
+      // 首次启动：引导开启通知（不必等到第一个任务完成）。?perm= / ?tray= / ?quit= 演示时不重复弹出。
+      if (!state.notifyAsked && !permParam && bootParams.get('tray') !== '1' && bootParams.get('quit') !== '1') {
         state.notifyAsked = true;
         setTimeout(() => openPermissionSheet([{ kind: 'notifications', detail: 'guide', target: '' }]), 500);
       }

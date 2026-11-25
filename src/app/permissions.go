@@ -228,9 +228,11 @@ func (a *App) issueCard(cx *core.Scope, th theme.Colors, is accessIssue) core.No
 			})
 		} else {
 			act(locales.AccessOpenSettings(cx), lucide.Settings, "access-settings", func() {
-				// Notification permission has no dedicated OpenPermissionSettings
-				// key; guide the user to the system app settings page.
-				a.toast(locales.ToastSettingsManual(a.cx))
+				a.cx.OpenPermissionSettings(core.PermissionNotifications, func(opened bool) {
+					if !opened {
+						a.toast(locales.ToastSettingsManual(a.cx))
+					}
+				})
 			})
 		}
 	default:
