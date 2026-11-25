@@ -227,3 +227,53 @@ func TestCompletedTaskIsNotOverwrittenByConcurrentPause(t *testing.T) {
 		t.Fatalf("completed task became %v instead of Done", statusOf(e, id))
 	}
 }
+
+func TestSetValidatorPersistsAcrossPauseAndClearsOnDone(t *testing.T) {
+	var e *Engine
+	var notifyCount atomic.Int32
+	valSet := make(chan struct{})
+	var starts atomic.Int32
+	var sawResumedVal atomic.Value
+	sawResumedVal.Store("")
+
+	e = New(func(Task) RunFunc {
+		return func(ctx context.Context, tk Task, _ func(int64, int64)) error {
+			if starts.Add(1) == 1 {
+				e.SetValidator(tk.ID, `"v1"`)
+				close(valSet)
+				<-ctx.Done()
+				return ctx.Err()
+			}
+			sawResumedVal.Store(tk.Validator)
+			return nil
+		}
+	}, func() {
+		notifyCount.Add(1)
+		_ = e.Snapshot()
+	}, nil)
+
+	id := e.Add(Task{Name: "val.bin", Direction: Download, Total: 100})
+	<-valSet
+	waitFor(t, "validator set", func() bool {
+		snap := e.Snapshot()
+		return len(snap) == 1 && snap[0].Validator == `"v1"`
+	})
+
+	e.Pause(id)
+	waitFor(t, "paused", func() bool { return statusOf(e, id) == Paused })
+	if got := e.Snapshot()[0].Validator; got != `"v1"` {
+		t.Fatalf("validator after pause = %q, want \"v1\"", got)
+	}
+
+	e.Resume(id)
+	waitFor(t, "done", func() bool { return statusOf(e, id) == Done })
+	if got, _ := sawResumedVal.Load().(string); got != `"v1"` {
+		t.Fatalf("resumed RunFunc saw validator = %q, want \"v1\"", got)
+	}
+	if got := e.Snapshot()[0].Validator; got != "" {
+		t.Fatalf("validator after done = %q, want empty", got)
+	}
+	if notifyCount.Load() == 0 {
+		t.Fatal("notify was never called")
+	}
+}

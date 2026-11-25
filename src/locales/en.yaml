@@ -10,6 +10,7 @@ tabLabel: Main navigation
 
 # Files page: header
 siteSwitchLabel: Switch OpenList site
+headerAddSite: "+ Add site"
 newOrUploadLabel: New or upload
 refreshDirLabel: Refresh this folder
 noSiteName: No site
@@ -21,6 +22,7 @@ clearSearchLabel: Clear search
 scopeLabel: Search scope
 scopeCurrent: This folder
 scopeGlobal: Everywhere
+parentDirLabel: Back to parent folder
 sortName: Name
 sortSize: Size
 sortDate: Date
@@ -237,7 +239,11 @@ groupNotifications: Notifications
 groupPaths: Folders and downloads
 groupAbout: Storage and about
 notifyMaster: Enable notifications
-notifyMasterDesc: System alerts when uploads, downloads or offline tasks succeed or fail; many alerts collapse into one
+notifyMasterDesc: Live progress in mobile notifications while transferring, and alerts when tasks succeed or fail; many alerts collapse into one
+notifyProgressDownloadTitle: "Downloading: {name}"
+notifyProgressUploadTitle: "Uploading: {name}"
+notifyProgressMultiTitle: "{count, plural, one {# transfer in progress} other {# transfers in progress}}"
+notifyProgressMultiBody: "{percent}% · {done} / {total}"
 notifyItemDownloadDone: "Downloaded: {name}"
 notifyItemUploadDone: "Uploaded: {name}"
 notifyItemTransferFailed: "Transfer failed: {name}"
@@ -364,3 +370,27 @@ toastSiteNeedLogin: "{name}: not signed in, or the sign-in expired. Sign in agai
 toastSiteDisabled: "{name}: the account {user} is disabled"
 toastSiteFailReason: "{name}: can't connect ({reason})"
 siteStatusLine: "{url} · {status}"
+
+# Transfers inline notice banner
+transferBannerProgressHeading: OpenList Client · Transfer progress
+transferBannerSummaryHeading: OpenList Client · Transfer summary
+transferBannerSummaryBody: "Downloaded {downloaded} · Uploaded {uploaded} · Tap to dismiss"
+transferBannerCloseLabel: Dismiss transfer summary
+
+# Desktop background running & tray
+groupDesktop: Background running
+closeToTrayTitle: Minimize to tray when closing window
+closeToTrayDesc: Keep transfers running in the system tray after closing the main window; click the tray icon to reopen
+toastCloseToTrayOn: Closing the window will minimize to the system tray
+toastCloseToTrayOff: Closing the window will quit (confirming if transfers are active)
+trayTooltipIdle: OpenList · No active transfers
+trayTooltipActive: "{count, plural, one {OpenList · # active transfer} other {OpenList · # active transfers}} ({percent}%)"
+trayMenuIdle: No active transfers
+trayMenuActive: "{count, plural, one {# active transfer} other {# active transfers}} · {percent}%"
+trayShowWindow: Show window
+trayOpenTransfers: Open transfers
+trayQuit: Quit OpenList
+quitConfirmTitle: Transfers still in progress
+quitConfirmBody: "{count, plural, one {# transfer is still running. Unfinished downloads keep their partial progress and can resume next time.} other {# transfers are still running. Unfinished downloads keep their partial progress and can resume next time.}}"
+quitConfirmCancel: Keep transferring
+quitConfirmAction: Quit app

@@ -10,10 +10,13 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/nsgo-dev/nsgo/core"
+	"github.com/nsgo-dev/nsgo/desktop"
 	"github.com/nsgo-dev/nsgo/ui"
+	"github.com/nsgo-dev/nsgo/widget"
 
 	"github.com/HW618/openlist-client/src/internal/access"
 	"github.com/HW618/openlist-client/src/internal/browse"
@@ -49,6 +52,7 @@ const (
 	sheetRename
 	sheetPermission
 	sheetLocalDir
+	sheetQuitConfirm
 )
 
 // pickerSpec is a request to choose a folder on the server.
@@ -125,6 +129,18 @@ type previewData struct {
 	Object openlist.Object
 	Text   string
 	Large  bool
+}
+
+// transferBannerState is the inline notice shown inside the Transfers page.
+type transferBannerState struct {
+	Visible      bool
+	Ongoing      bool
+	Heading      string
+	Status       string
+	Title        string
+	Body         string
+	Progress     float32
+	ShowProgress bool
 }
 
 // siteStatus is what the last test of a site found.
@@ -215,11 +231,13 @@ type App struct {
 	fabStart browse.Pos
 
 	// Transfers.
-	engine     *transfer.Engine
-	tasks      *core.Signal[[]transfer.Task]
-	filter     *core.Signal[string]
-	offline    *core.Signal[offlineState]
-	webFolders *core.Signal[map[string]string]
+	engine             *transfer.Engine
+	tasks              *core.Signal[[]transfer.Task]
+	transferBanner     *core.Signal[transferBannerState]
+	bannerDismissedSig string
+	filter             *core.Signal[string]
+	offline            *core.Signal[offlineState]
+	webFolders         *core.Signal[map[string]string]
 	probeDir   func(string) error
 	// canWrite is whether the folder of the current site takes files, as the
 	// last look at it found, where Android tells it in settings.
@@ -240,22 +258,54 @@ type App struct {
 	// keychainTold is whether the user was told this run of a secure store
 	// the platform lacks.
 	keychainTold bool
-	notified     map[string]bool
-	offlineBusy  bool
-	polling      bool
-	lastSig      string
-	lastDone     int
-	uploadMu     sync.Mutex
-	uploadFile   map[string]core.File
-	uploadSeen   map[string]bool // keys of uploads the task list has shown; the engine goroutine's
+	notified      map[string]bool
+	offlineBusy   bool
+	polling       bool
+	lastSig       string
+	lastDone      int
+	lastSavedDone int64
+	lastTaskSave  time.Time
+	uploadMu      sync.Mutex
+	uploadFile    map[string]core.File
+	uploadSeen    map[string]bool // keys of uploads the task list has shown; the engine goroutine's
+	wakeMu        sync.Mutex
+	wakeCh        chan struct{}
+	resumeMu      sync.Mutex
+	resumableFail map[string]bool
+	inBackground  atomic.Bool
 	// taskStatus and offlineSeen track prior statuses so Done/Failed notify once.
-	taskStatus  map[string]transfer.Status
-	offlineSeen map[string]int
-	notifyCount int
-	notifyOK    int
-	notifyFail  int
-	notifySeq   int
-	notifyShown []string
+	taskStatus           map[string]transfer.Status
+	offlineSeen          map[string]int
+	notifyCount          int
+	notifyOK             int
+	notifyFail           int
+	notifySeq            int
+	notifyShown          []string
+	notifyItemKeys       map[string]bool // active notification item key -> ok
+	notifySummaryShown   bool
+	notifyPermChecking   bool
+	progressAct          *widget.Activity
+	progressUnsupported  bool
+	progressPermSyncAt   time.Time
+	progressSig          string
+	progressDismissedSig string
+	progressLastKey      string
+	progressLastPct      int
+	progressLastAt       time.Time
+	progressTimerPending bool
+	progressNotifyShown  bool
+	progressNotifySig    string
+	progressNotifyKey    string
+	progressNotifyPct    int
+	progressNotifyAt     time.Time
+	progressNotifyTimer  bool
+	releaseAwake         func()
+
+	// Desktop tray and window lifecycle.
+	appScope    *core.Scope
+	mainWin     *desktop.Window
+	tray        *desktop.Tray
+	pendingQuit func(bool)
 
 	// Settings.
 	status       *core.Signal[map[string]siteStatus]
@@ -277,7 +327,8 @@ func sigAlways[T any](cx *core.Scope, v T) *core.Signal[T] {
 // newApp builds the state in cx, which is the root scope.
 func newApp(cx *core.Scope, secrets store.Secrets) *App {
 	a := &App{cx: cx, secrets: secrets, clients: map[string]*openlist.Client{}, cache: map[string]listResult{},
-		uploadFile: map[string]core.File{}, uploadSeen: map[string]bool{}, toaster: ui.NewToaster(cx)}
+		uploadFile: map[string]core.File{}, uploadSeen: map[string]bool{}, toaster: ui.NewToaster(cx),
+		resumableFail: map[string]bool{}, notifyItemKeys: map[string]bool{}}
 
 	a.tab = core.NewSignal(cx, tabFiles)
 
@@ -286,7 +337,20 @@ func newApp(cx *core.Scope, secrets store.Secrets) *App {
 	a.prefStore = core.NewPersisted(cx, "prefs", store.DefaultPrefs(), core.PersistOptions{Version: 1})
 	a.taskStore = core.NewPersisted[[]transfer.Task](cx, "transfers", nil, core.PersistOptions{Version: 1})
 
-	a.sites = sigAlways(cx, a.sitesStore.Get())
+	sites := slices.Clone(a.sitesStore.Get())
+	sitesRelocated := false
+	for i := range sites {
+		if d := sites[i].Settings.LocalDir; d != "" && d != localDirAsk {
+			if moved := relocateSavedPath(d); moved != d {
+				sites[i].Settings.LocalDir = moved
+				sitesRelocated = true
+			}
+		}
+	}
+	if sitesRelocated {
+		_ = a.sitesStore.Set(sites)
+	}
+	a.sites = sigAlways(cx, sites)
 	a.siteID = core.NewSignal(cx, a.idStore.Get())
 	prefs := a.prefStore.Get().Fix()
 	a.prefs = core.NewSignal(cx, prefs)
@@ -335,6 +399,7 @@ func newApp(cx *core.Scope, secrets store.Secrets) *App {
 	a.cacheVersion = core.NewSignal(cx, 0)
 
 	a.tasks = sigAlways(cx, []transfer.Task(nil))
+	a.transferBanner = core.NewSignal(cx, transferBannerState{})
 	a.offline = sigAlways(cx, offlineState{})
 	a.webFolders = sigAlways(cx, map[string]string{})
 	a.probeDir = access.ProbeDir
@@ -366,16 +431,49 @@ func newApp(cx *core.Scope, secrets store.Secrets) *App {
 
 	a.buildResources()
 	initialTasks := slices.Clone(a.taskStore.Get())
+	tasksRelocated := false
+	var autoResumeDownloads []string
 	for i := range initialTasks {
-		if initialTasks[i].Direction == transfer.Upload && initialTasks[i].Status != transfer.Done && strings.HasPrefix(initialTasks[i].LocalPath, "mem:") {
-			initialTasks[i].Status = transfer.Failed
-			initialTasks[i].Err = "upload source is no longer available after restart"
+		t := &initialTasks[i]
+		if t.LocalPath != "" {
+			if moved := relocateSavedPath(t.LocalPath); moved != t.LocalPath {
+				t.LocalPath = moved
+				tasksRelocated = true
+			}
 		}
+		if t.Direction == transfer.Upload && t.Status != transfer.Done && strings.HasPrefix(t.LocalPath, "mem:") {
+			t.Status = transfer.Failed
+			t.Err = "upload source is no longer available after restart"
+			continue
+		}
+		if t.Direction == transfer.Download && t.Status != transfer.Done {
+			if sz := a.existingPartSize(*t); sz > 0 {
+				if t.Total > 0 && sz > t.Total {
+					sz = t.Total
+				}
+				t.Done = sz
+			}
+			if t.Status == transfer.Active {
+				autoResumeDownloads = append(autoResumeDownloads, t.ID)
+			}
+		}
+	}
+	if tasksRelocated {
+		_ = a.taskStore.Set(initialTasks)
 	}
 	a.engine = transfer.New(a.runner, a.transfersChanged, initialTasks)
 	a.lastDone = -1
 	a.syncTasks()
 	a.bindNotifications()
+	a.bindDeepLinks()
+	a.bindLifecycleAndNetwork()
+	if len(autoResumeDownloads) > 0 {
+		a.cx.Post(func() {
+			for _, id := range autoResumeDownloads {
+				a.engine.Resume(id)
+			}
+		})
+	}
 	if a.prefs.GetUntracked().NotifyMaster() {
 		a.cx.Post(a.pollOffline)
 	}
@@ -864,9 +962,17 @@ func (a *App) selectAll(all bool) {
 
 // ---- panels ----
 
-func (a *App) openSheet(s sheetState) { a.sheet.Set(s) }
+func (a *App) openSheet(s sheetState) {
+	if s.Kind != sheetQuitConfirm {
+		a.cancelPendingQuit()
+	}
+	a.sheet.Set(s)
+}
 
-func (a *App) closeSheet() { a.sheet.Set(sheetState{}) }
+func (a *App) closeSheet() {
+	a.cancelPendingQuit()
+	a.sheet.Set(sheetState{})
+}
 
 // toast shows a short message.
 func (a *App) toast(msg string) {

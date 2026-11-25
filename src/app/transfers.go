@@ -73,8 +73,79 @@ func (a *App) transfersPage(cx *core.Scope) core.Node {
 				}
 				a.syncTasks()
 			})),
+		a.transferBannerCard(cx),
 		filters,
 		core.View{Style: fillStyle, Children: []core.Node{empty}})
+}
+
+// transferBannerCard shows an inline transfer progress or collapsed summary
+// notice inside the Transfers tab only, dismissed when tapped.
+func (a *App) transferBannerCard(cx *core.Scope) core.Node {
+	return core.Show{
+		When: func() bool { return a.transferBanner.Get().Visible },
+		Then: func(cx *core.Scope) core.Node {
+			th := theme.Of(cx)
+			return core.View{
+				Style: core.Style{Padding: core.Edges{Left: theme.Space4, Right: theme.Space4, Bottom: 6}},
+				Children: []core.Node{
+					core.View{
+						Role:    core.RoleButton,
+						Label:   locales.TransferBannerCloseLabel(cx),
+						TestID:  "transfer-banner",
+						OnPress: func(core.PressEvent) { a.dismissTransferBanner() },
+						Style: core.Style{
+							Gap:          4,
+							Padding:      core.All(12),
+							BorderWidth:  1,
+							CornerRadius: theme.RadiusMD,
+							BorderCurve:  core.BorderCurveContinuous,
+						},
+						StyleFunc: cardStyle(cx, theme.RadiusMD),
+						Children: []core.Node{
+							core.View{
+								Style: core.Style{Direction: core.Row, AlignItems: core.AlignCenter, Gap: 8},
+								Children: []core.Node{
+									oneLine(txtf(cx, func() string { return a.transferBanner.Get().Heading },
+										theme.TypeCaption.Merge(core.Style{FontWeight: ui.Semibold}), cMuted)),
+									spacer(),
+									core.Show{
+										When: func() bool { return a.transferBanner.Get().Status != "" },
+										Then: func(cx *core.Scope) core.Node {
+											return txtf(cx, func() string { return a.transferBanner.Get().Status },
+												theme.TypeCaption.Merge(core.Style{FontWeight: ui.Semibold}), cAccent)
+										},
+									},
+								},
+							},
+							core.Text{
+								ContentFunc:   func() string { return a.transferBanner.Get().Title },
+								MaxLines:      2,
+								EllipsizeMode: core.EllipsizeTail,
+								Style:         theme.TypeSmall.Merge(core.Style{FontWeight: ui.Semibold}),
+								StyleFunc:     func() core.Style { return core.Style{Color: th.Text()} },
+							},
+							core.Text{
+								ContentFunc:   func() string { return a.transferBanner.Get().Body },
+								MaxLines:      2,
+								EllipsizeMode: core.EllipsizeTail,
+								Style:         theme.TypeCaption,
+								StyleFunc:     func() core.Style { return core.Style{Color: th.Muted()} },
+							},
+							core.Show{
+								When: func() bool { return a.transferBanner.Get().ShowProgress },
+								Then: func(cx *core.Scope) core.Node {
+									return ui.Progress{
+										Value: func() float32 { return a.transferBanner.Get().Progress },
+										Label: locales.TransferBannerProgressHeading(cx),
+									}
+								},
+							},
+						},
+					},
+				},
+			}
+		},
+	}
 }
 
 func (a *App) filterChip(cx *core.Scope, id, text string) core.Node {

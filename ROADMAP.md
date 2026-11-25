@@ -1,6 +1,6 @@
 # 路线图 / Roadmap
 
-本文档列出 OpenList Client 的后续计划，并对每一项做了可行性评估。评估基于 [NSGo](https://nsgo.dev/) v0.2.0 的文档和本项目现有代码；凡是文档里没有写明、需要动手验证的地方，都标成了「待验证」，并列在文末的验证清单里。
+本文档列出 OpenList Client 的后续计划，并对每一项做了可行性评估。评估基于 [NSGo](https://nsgo.dev/) v0.3.0 的文档与源码及本项目现有代码；凡是文档里没有写明、需要动手验证的地方，都标成了「待验证」，并列在文末的验证清单里。
 
 > 状态说明：✅ 现有能力就能做 · ⚠️ 能做，但有平台限制或要先验证 · ❌ 目前做不到，需要 NSGo 上游支持或换方案
 
@@ -65,7 +65,7 @@
 - 安卓需要在 `nsgo.yaml` 的 `android.permissions` 加 `POST_NOTIFICATIONS`（Android 13+）。
 
 **限制（要在文档和界面里说清楚）**
-- NSGo 没有通用的后台任务接口（只有位置、悬浮窗这两类前台服务）。**应用被系统杀掉或进入深度休眠后，传输会中断，也就没有通知**；离线下载在服务器端完成后，应用没在运行也收不到通知（需要服务器推送，OpenList 没有）。
+- 当前所有下载与上传均运行在 Go 传输引擎中（支持 `.part` 断点续传、失败与连接停滞自动重试、前后台切换与恢复联网自动续传，以及 Android 应用内单条静音进度通知；此前尝试接入的 NSGo `cx.Download` / Android `BackgroundDownloadService` 因真机频繁报 `SocketException` 且会强制显示系统下载器通知已被移除）。由于 NSGo v0.3.0 仍缺少面向任意 Go 传输的通用前台服务与后台上传接口，移动端切到后台后若系统挂起进程仍可能中断传输，回到应用或恢复网络时会从 `.part` 断点继续；离线下载在服务器端完成后，应用没在运行也收不到通知（需要服务器推送，OpenList 没有）。
 - Windows 上点击通知要把应用启动起来，需要用安装包安装过（NSGo 说明）。
 - Linux 和网页版只显示本次运行里发出的通知。
 
@@ -298,9 +298,9 @@ OpenList 自带 WebDAV 服务（`/dav`）。系统文件管理器原生支持挂
 
 ## 需要向 NSGo 提的需求（上游）
 
-- 通用后台任务：安卓 WorkManager/前台服务（`dataSync`、`mediaPlayback`）、iOS 后台任务。
-- 安卓/iOS 接收分享、安卓 `DocumentsProvider`、iOS File Provider 扩展。
-- 安卓 `cx.AuthSession` 支持（用于 SSO）。
+- 通用 Go 后台任务与后台上传接口：v0.3.0 虽然提供了 `cx.Download`（Android `dataSync` 前台服务与 iOS 后台 `URLSession`）及 `widget.StartActivity`（Live Updates），但 `HttpURLConnection` 在真机环境容易发生 `SocketException` 且会显示独立于应用的系统通知；仍需要能托管 Go 传输（上传与断点下载）的通用 Android 前台服务（`dataSync` 类型）及 iOS 后台任务接口（以及安卓 `mediaPlayback` 前台服务）。
+- 安卓/iOS 接收分享（v0.3.0 已新增 `mobile.OnShared` + `android.share_types`）、安卓 `DocumentsProvider`、iOS File Provider 扩展。
+- 安卓 `cx.AuthSession` 支持（v0.3.0 已通过 Custom Tabs 支持安卓 `cx.AuthSession`）。
 - 安卓 `PickDirectories` 返回可写目录或保留路径。
 
 ## 怎么推进

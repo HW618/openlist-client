@@ -73,6 +73,24 @@ func TestNotifyPrefsDefaultOn(t *testing.T) {
 	}
 }
 
+func TestDesktopPrefsCloseToTrayDefaultOn(t *testing.T) {
+	if !DefaultPrefs().CloseToTray() {
+		t.Fatal("DefaultPrefs().CloseToTray() should default to true")
+	}
+	var zero Prefs
+	if !zero.CloseToTray() {
+		t.Fatal("zero Prefs.CloseToTray() should default to true")
+	}
+	p := Prefs{Desktop: DesktopPrefs{Set: true, CloseToTray: false}}
+	if p.CloseToTray() {
+		t.Fatal("explicit CloseToTray=false should return false")
+	}
+	p.Desktop.CloseToTray = true
+	if !p.CloseToTray() {
+		t.Fatal("explicit CloseToTray=true should return true")
+	}
+}
+
 func TestFileSecrets(t *testing.T) {
 	dir := t.TempDir()
 	s := &FileSecrets{Dir: filepath.Join(dir, "sub")}

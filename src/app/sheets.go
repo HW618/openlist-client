@@ -39,6 +39,7 @@ func (a *App) sheetHost(cx *core.Scope) core.Node {
 		at(sheetRename, a.renameSheet),
 		at(sheetPermission, a.permissionSheet),
 		at(sheetLocalDir, a.localDirSheet),
+		at(sheetQuitConfirm, a.quitConfirmSheet),
 	}}
 }
 
@@ -179,10 +180,14 @@ func (a *App) sitesSheet(cx *core.Scope, _ sheetState) core.Node {
 				},
 			}
 		})
-	return a.sheetFrame(locales.SiteSwitcherTitle(cx),
-		[]core.Node{core.View{Style: core.Style{Gap: 8}, Children: []core.Node{rows}},
-			ui.Button{Text: locales.AddNewSite(cx), Variant: ui.ButtonSecondary, OnPress: func() { a.openSheet(sheetState{Kind: sheetAddSite}) }, TestID: "add-new-site"}},
-		nil)
+	addBtn := ui.Button{
+		Text:    locales.AddNewSite(cx),
+		Variant: ui.ButtonSecondary,
+		OnPress: func() { a.openSheet(sheetState{Kind: sheetAddSite}) },
+		TestID:  "add-new-site",
+	}
+	return a.sheetFrameWithAction(locales.SiteSwitcherTitle(cx), addBtn,
+		[]core.Node{core.View{Style: core.Style{Gap: 8}, Children: []core.Node{rows}}}, nil)
 }
 
 func (a *App) addSiteSheet(cx *core.Scope, _ sheetState) core.Node {
@@ -660,4 +665,15 @@ func (a *App) setLocalDir(siteID, dir string) {
 		dir = locales.LocalDirAsk(a.cx)
 	}
 	a.toast(locales.ToastLocalDir(a.cx, dir))
+}
+
+// quitConfirmSheet asks the user before quitting while transfers are active.
+func (a *App) quitConfirmSheet(cx *core.Scope, _ sheetState) core.Node {
+	th := theme.Of(cx)
+	return a.sheetFrame(locales.QuitConfirmTitle(cx),
+		[]core.Node{txtf(cx, func() string { return locales.QuitConfirmBody(cx, max(1, running(a.tasks.Get()))) }, theme.TypeSmall, cSecond)},
+		[]core.Node{
+			ui.Button{Text: locales.QuitConfirmCancel(cx), Variant: ui.ButtonSecondary, Flex: 1, OnPress: a.closeSheet, TestID: "quit-cancel"},
+			ui.Button{Text: locales.QuitConfirmAction(cx), Flex: 1, Color: th.Danger, OnPress: a.confirmQuitNow, TestID: "quit-confirm"},
+		})
 }

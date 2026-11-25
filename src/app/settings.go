@@ -2,6 +2,7 @@ package app
 
 import (
 	"github.com/nsgo-dev/nsgo/core"
+	"github.com/nsgo-dev/nsgo/desktop"
 	"github.com/nsgo-dev/nsgo/icons/lucide"
 	"github.com/nsgo-dev/nsgo/ui"
 
@@ -45,6 +46,9 @@ func (a *App) settingsPage(cx *core.Scope) core.Node {
 				group(locales.GroupSites(cx), a.sitesList(cx)),
 				group(locales.GroupAppearance(cx), a.appearanceRows(cx)...),
 				group(locales.GroupNotifications(cx), a.notificationRows(cx)...),
+				core.Show{When: func() bool { return desktop.IsAvailable(cx) }, Then: func(cx *core.Scope) core.Node {
+					return group(locales.GroupDesktop(cx), a.desktopRows(cx)...)
+				}},
 				group(locales.GroupPaths(cx), a.pathRows(cx)...),
 				group(locales.GroupAbout(cx), a.aboutRows(cx)...),
 			}}}})
@@ -230,6 +234,28 @@ func (a *App) notificationRows(cx *core.Scope) []core.Node {
 	}
 	return []core.Node{
 		optionRow(cx, locales.NotifyMaster(cx), locales.NotifyMasterDesc(cx), master),
+	}
+}
+
+// desktopRows holds desktop-only background/tray settings.
+func (a *App) desktopRows(cx *core.Scope) []core.Node {
+	closeToTray := ui.Switch{
+		Checked: func() bool { return a.prefs.Get().CloseToTray() },
+		Label:   locales.CloseToTrayTitle(cx),
+		TestID:  "close-to-tray",
+		OnChange: func(on bool) {
+			a.savePrefs(func(p *store.Prefs) {
+				p.Desktop = store.DesktopPrefs{Set: true, CloseToTray: on}
+			})
+			if on {
+				a.toast(locales.ToastCloseToTrayOn(cx))
+			} else {
+				a.toast(locales.ToastCloseToTrayOff(cx))
+			}
+		},
+	}
+	return []core.Node{
+		optionRow(cx, locales.CloseToTrayTitle(cx), locales.CloseToTrayDesc(cx), closeToTray),
 	}
 }
 
