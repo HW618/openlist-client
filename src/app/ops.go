@@ -290,6 +290,7 @@ func (a *App) download(items []browse.Item) {
 	}
 	a.endSelect()
 	a.toast(locales.ToastDownloadQueued(a.cx, n))
+	a.ensureNotifyPermissionForTransfer()
 }
 
 // pickAndUpload asks for files on this device and queues them for the folder
@@ -323,6 +324,7 @@ func (a *App) pickAndUpload() {
 		}
 		a.closeSheet()
 		a.toast(locales.ToastUploadQueued(a.cx, len(files)))
+		a.ensureNotifyPermissionForTransfer()
 	})
 }
 

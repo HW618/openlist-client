@@ -44,62 +44,70 @@ func For(cx *core.Scope) Messages {
 // its method, for the TSX declarations of the messages
 // (tsx.RegisterMessages).
 var Parameters = map[string][]string{
-	"ItemsCount":               {"count"},
-	"DriverLabel":              {"name"},
-	"MoreActionsLabel":         {"name"},
-	"SelectedCount":            {"count"},
-	"ToastDownloadQueued":      {"count"},
-	"ToastLinksCopied":         {"count"},
-	"ToastMoved":               {"count", "folder"},
-	"ToastDeleted":             {"count"},
-	"ToastFolderCreated":       {"name"},
-	"ToastFileCreated":         {"name"},
-	"ToastUploadQueued":        {"count"},
-	"ToastOfflineAdded":        {"dir"},
-	"ToastSwitchedSite":        {"name"},
-	"ToastSiteConnected":       {"name"},
-	"ToastLinkCopied":          {"name"},
-	"ToastSiteOk":              {"name", "latency"},
-	"ToastSiteFail":            {"name"},
-	"ToastFilesDir":            {"dir"},
-	"ToastOfflineDir":          {"dir"},
-	"ToastLocalDir":            {"dir"},
-	"ToastRetrying":            {"name"},
-	"ToastSignedOut":           {"name"},
-	"ToastError":               {"message"},
-	"SignInFailed":             {"message"},
-	"DirChosen":                {"path"},
-	"MoveTitle":                {"count"},
-	"MoveTarget":               {"path"},
-	"DeleteBody":               {"name"},
-	"DeleteBatchBody":          {"count"},
-	"NotifyItemDownloadDone":   {"name"},
-	"NotifyItemUploadDone":     {"name"},
-	"NotifyItemTransferFailed": {"name"},
-	"NotifyItemOfflineDone":    {"name"},
-	"NotifyItemOfflineFailed":  {"name"},
-	"NotifySummaryDone":        {"count"},
-	"NotifySummaryFailed":      {"count"},
-	"NotifySummaryMixed":       {"total", "ok", "fail"},
-	"SiteLatency":              {"latency"},
-	"SiteLatencyLine":          {"url", "latency"},
-	"ExpandSites":              {"count"},
-	"CacheUsed":                {"size"},
-	"AboutDesc":                {"version"},
-	"OfflineLoadError":         {"message"},
-	"WebTooLarge":              {"size"},
-	"AccessFolderDesc":         {"dir"},
-	"AccessNetworkDesc":        {"host"},
-	"AccessServerDesc":         {"detail"},
-	"AccessBrowserDesc":        {"detail"},
-	"SiteAuthOk":               {"user", "role"},
-	"SiteAccountDisabled":      {"user"},
-	"ToastSiteAuthOk":          {"name", "user", "latency"},
-	"ToastSiteGuest":           {"name", "latency"},
-	"ToastSiteNeedLogin":       {"name"},
-	"ToastSiteDisabled":        {"name", "user"},
-	"ToastSiteFailReason":      {"name", "reason"},
-	"SiteStatusLine":           {"url", "status"},
+	"ItemsCount":                  {"count"},
+	"DriverLabel":                 {"name"},
+	"MoreActionsLabel":            {"name"},
+	"SelectedCount":               {"count"},
+	"ToastDownloadQueued":         {"count"},
+	"ToastLinksCopied":            {"count"},
+	"ToastMoved":                  {"count", "folder"},
+	"ToastDeleted":                {"count"},
+	"ToastFolderCreated":          {"name"},
+	"ToastFileCreated":            {"name"},
+	"ToastUploadQueued":           {"count"},
+	"ToastOfflineAdded":           {"dir"},
+	"ToastSwitchedSite":           {"name"},
+	"ToastSiteConnected":          {"name"},
+	"ToastLinkCopied":             {"name"},
+	"ToastSiteOk":                 {"name", "latency"},
+	"ToastSiteFail":               {"name"},
+	"ToastFilesDir":               {"dir"},
+	"ToastOfflineDir":             {"dir"},
+	"ToastLocalDir":               {"dir"},
+	"ToastRetrying":               {"name"},
+	"ToastSignedOut":              {"name"},
+	"ToastError":                  {"message"},
+	"SignInFailed":                {"message"},
+	"DirChosen":                   {"path"},
+	"MoveTitle":                   {"count"},
+	"MoveTarget":                  {"path"},
+	"DeleteBody":                  {"name"},
+	"DeleteBatchBody":             {"count"},
+	"NotifyProgressDownloadTitle": {"name"},
+	"NotifyProgressUploadTitle":   {"name"},
+	"NotifyProgressMultiTitle":    {"count"},
+	"NotifyProgressMultiBody":     {"percent", "done", "total"},
+	"NotifyItemDownloadDone":      {"name"},
+	"NotifyItemUploadDone":        {"name"},
+	"NotifyItemTransferFailed":    {"name"},
+	"NotifyItemOfflineDone":       {"name"},
+	"NotifyItemOfflineFailed":     {"name"},
+	"NotifySummaryDone":           {"count"},
+	"NotifySummaryFailed":         {"count"},
+	"NotifySummaryMixed":          {"total", "ok", "fail"},
+	"SiteLatency":                 {"latency"},
+	"SiteLatencyLine":             {"url", "latency"},
+	"ExpandSites":                 {"count"},
+	"CacheUsed":                   {"size"},
+	"AboutDesc":                   {"version"},
+	"OfflineLoadError":            {"message"},
+	"WebTooLarge":                 {"size"},
+	"AccessFolderDesc":            {"dir"},
+	"AccessNetworkDesc":           {"host"},
+	"AccessServerDesc":            {"detail"},
+	"AccessBrowserDesc":           {"detail"},
+	"SiteAuthOk":                  {"user", "role"},
+	"SiteAccountDisabled":         {"user"},
+	"ToastSiteAuthOk":             {"name", "user", "latency"},
+	"ToastSiteGuest":              {"name", "latency"},
+	"ToastSiteNeedLogin":          {"name"},
+	"ToastSiteDisabled":           {"name", "user"},
+	"ToastSiteFailReason":         {"name", "reason"},
+	"SiteStatusLine":              {"url", "status"},
+	"TransferBannerSummaryBody":   {"downloaded", "uploaded"},
+	"TrayTooltipActive":           {"count", "percent"},
+	"TrayMenuActive":              {"count", "percent"},
+	"QuitConfirmBody":             {"count"},
 }
 
 // Translation is a language's messages another package supplies:
@@ -107,63 +115,71 @@ var Parameters = map[string][]string{
 // of the others; a key or a field left out leaves the message to the
 // catalog.
 type Translation struct {
-	Texts                    map[string]string
-	ItemsCount               func(count int) string
-	DriverLabel              func(name string) string
-	MoreActionsLabel         func(name string) string
-	SelectedCount            func(count int) string
-	ToastDownloadQueued      func(count int) string
-	ToastLinksCopied         func(count int) string
-	ToastMoved               func(count int, folder string) string
-	ToastDeleted             func(count int) string
-	ToastFolderCreated       func(name string) string
-	ToastFileCreated         func(name string) string
-	ToastUploadQueued        func(count int) string
-	ToastOfflineAdded        func(dir string) string
-	ToastSwitchedSite        func(name string) string
-	ToastSiteConnected       func(name string) string
-	ToastLinkCopied          func(name string) string
-	ToastSiteOk              func(name string, latency string) string
-	ToastSiteFail            func(name string) string
-	ToastFilesDir            func(dir string) string
-	ToastOfflineDir          func(dir string) string
-	ToastLocalDir            func(dir string) string
-	ToastRetrying            func(name string) string
-	ToastSignedOut           func(name string) string
-	ToastError               func(message string) string
-	SignInFailed             func(message string) string
-	DirChosen                func(path string) string
-	MoveTitle                func(count int) string
-	MoveTarget               func(path string) string
-	DeleteBody               func(name string) string
-	DeleteBatchBody          func(count int) string
-	NotifyItemDownloadDone   func(name string) string
-	NotifyItemUploadDone     func(name string) string
-	NotifyItemTransferFailed func(name string) string
-	NotifyItemOfflineDone    func(name string) string
-	NotifyItemOfflineFailed  func(name string) string
-	NotifySummaryDone        func(count int) string
-	NotifySummaryFailed      func(count int) string
-	NotifySummaryMixed       func(total int, ok string, fail string) string
-	SiteLatency              func(latency string) string
-	SiteLatencyLine          func(url string, latency string) string
-	ExpandSites              func(count int) string
-	CacheUsed                func(size string) string
-	AboutDesc                func(version string) string
-	OfflineLoadError         func(message string) string
-	WebTooLarge              func(size string) string
-	AccessFolderDesc         func(dir string) string
-	AccessNetworkDesc        func(host string) string
-	AccessServerDesc         func(detail string) string
-	AccessBrowserDesc        func(detail string) string
-	SiteAuthOk               func(user string, role string) string
-	SiteAccountDisabled      func(user string) string
-	ToastSiteAuthOk          func(name string, user string, latency string) string
-	ToastSiteGuest           func(name string, latency string) string
-	ToastSiteNeedLogin       func(name string) string
-	ToastSiteDisabled        func(name string, user string) string
-	ToastSiteFailReason      func(name string, reason string) string
-	SiteStatusLine           func(url string, status string) string
+	Texts                       map[string]string
+	ItemsCount                  func(count int) string
+	DriverLabel                 func(name string) string
+	MoreActionsLabel            func(name string) string
+	SelectedCount               func(count int) string
+	ToastDownloadQueued         func(count int) string
+	ToastLinksCopied            func(count int) string
+	ToastMoved                  func(count int, folder string) string
+	ToastDeleted                func(count int) string
+	ToastFolderCreated          func(name string) string
+	ToastFileCreated            func(name string) string
+	ToastUploadQueued           func(count int) string
+	ToastOfflineAdded           func(dir string) string
+	ToastSwitchedSite           func(name string) string
+	ToastSiteConnected          func(name string) string
+	ToastLinkCopied             func(name string) string
+	ToastSiteOk                 func(name string, latency string) string
+	ToastSiteFail               func(name string) string
+	ToastFilesDir               func(dir string) string
+	ToastOfflineDir             func(dir string) string
+	ToastLocalDir               func(dir string) string
+	ToastRetrying               func(name string) string
+	ToastSignedOut              func(name string) string
+	ToastError                  func(message string) string
+	SignInFailed                func(message string) string
+	DirChosen                   func(path string) string
+	MoveTitle                   func(count int) string
+	MoveTarget                  func(path string) string
+	DeleteBody                  func(name string) string
+	DeleteBatchBody             func(count int) string
+	NotifyProgressDownloadTitle func(name string) string
+	NotifyProgressUploadTitle   func(name string) string
+	NotifyProgressMultiTitle    func(count int) string
+	NotifyProgressMultiBody     func(percent string, done string, total string) string
+	NotifyItemDownloadDone      func(name string) string
+	NotifyItemUploadDone        func(name string) string
+	NotifyItemTransferFailed    func(name string) string
+	NotifyItemOfflineDone       func(name string) string
+	NotifyItemOfflineFailed     func(name string) string
+	NotifySummaryDone           func(count int) string
+	NotifySummaryFailed         func(count int) string
+	NotifySummaryMixed          func(total int, ok string, fail string) string
+	SiteLatency                 func(latency string) string
+	SiteLatencyLine             func(url string, latency string) string
+	ExpandSites                 func(count int) string
+	CacheUsed                   func(size string) string
+	AboutDesc                   func(version string) string
+	OfflineLoadError            func(message string) string
+	WebTooLarge                 func(size string) string
+	AccessFolderDesc            func(dir string) string
+	AccessNetworkDesc           func(host string) string
+	AccessServerDesc            func(detail string) string
+	AccessBrowserDesc           func(detail string) string
+	SiteAuthOk                  func(user string, role string) string
+	SiteAccountDisabled         func(user string) string
+	ToastSiteAuthOk             func(name string, user string, latency string) string
+	ToastSiteGuest              func(name string, latency string) string
+	ToastSiteNeedLogin          func(name string) string
+	ToastSiteDisabled           func(name string, user string) string
+	ToastSiteFailReason         func(name string, reason string) string
+	SiteStatusLine              func(url string, status string) string
+	TransferBannerSummaryBody   func(downloaded string, uploaded string) string
+	TrayTooltipActive           func(count int, percent string) string
+	TrayMenuActive              func(count int, percent string) string
+	QuitConfirmBody             func(count int) string
 }
 
 var supplied = map[string]Translation{}
@@ -176,6 +192,7 @@ const (
 	textTabSettings
 	textTabLabel
 	textSiteSwitchLabel
+	textHeaderAddSite
 	textNewOrUploadLabel
 	textRefreshDirLabel
 	textNoSiteName
@@ -185,6 +202,7 @@ const (
 	textScopeLabel
 	textScopeCurrent
 	textScopeGlobal
+	textParentDirLabel
 	textSortName
 	textSortSize
 	textSortDate
@@ -438,6 +456,22 @@ const (
 	textSiteAuthGuest
 	textSiteNeedLogin
 	textSiteUnreachable
+	textTransferBannerProgressHeading
+	textTransferBannerSummaryHeading
+	textTransferBannerCloseLabel
+	textGroupDesktop
+	textCloseToTrayTitle
+	textCloseToTrayDesc
+	textToastCloseToTrayOn
+	textToastCloseToTrayOff
+	textTrayTooltipIdle
+	textTrayMenuIdle
+	textTrayShowWindow
+	textTrayOpenTransfers
+	textTrayQuit
+	textQuitConfirmTitle
+	textQuitConfirmCancel
+	textQuitConfirmAction
 	numTexts
 )
 
@@ -450,6 +484,7 @@ var keyOfText = [numTexts]string{
 	"tabSettings",
 	"tabLabel",
 	"siteSwitchLabel",
+	"headerAddSite",
 	"newOrUploadLabel",
 	"refreshDirLabel",
 	"noSiteName",
@@ -459,6 +494,7 @@ var keyOfText = [numTexts]string{
 	"scopeLabel",
 	"scopeCurrent",
 	"scopeGlobal",
+	"parentDirLabel",
 	"sortName",
 	"sortSize",
 	"sortDate",
@@ -712,6 +748,22 @@ var keyOfText = [numTexts]string{
 	"siteAuthGuest",
 	"siteNeedLogin",
 	"siteUnreachable",
+	"transferBannerProgressHeading",
+	"transferBannerSummaryHeading",
+	"transferBannerCloseLabel",
+	"groupDesktop",
+	"closeToTrayTitle",
+	"closeToTrayDesc",
+	"toastCloseToTrayOn",
+	"toastCloseToTrayOff",
+	"trayTooltipIdle",
+	"trayMenuIdle",
+	"trayShowWindow",
+	"trayOpenTransfers",
+	"trayQuit",
+	"quitConfirmTitle",
+	"quitConfirmCancel",
+	"quitConfirmAction",
 }
 
 // textsEn are the messages without arguments in en.
@@ -722,6 +774,7 @@ var textsEn = i18n.NewTexts(""+
 	"Settings"+
 	"Main navigation"+
 	"Switch OpenList site"+
+	"+ Add site"+
 	"New or upload"+
 	"Refresh this folder"+
 	"No site"+
@@ -731,6 +784,7 @@ var textsEn = i18n.NewTexts(""+
 	"Search scope"+
 	"This folder"+
 	"Everywhere"+
+	"Back to parent folder"+
 	"Name"+
 	"Size"+
 	"Date"+
@@ -890,7 +944,7 @@ var textsEn = i18n.NewTexts(""+
 	"Folders and downloads"+
 	"Storage and about"+
 	"Enable notifications"+
-	"System alerts when uploads, downloads or offline tasks succeed or fail; many alerts collapse into one"+
+	"Live progress in mobile notifications while transferring, and alerts when tasks succeed or fail; many alerts collapse into one"+
 	"Too many alerts collapsed. Tap to open Transfers"+
 	"Tap to open Transfers"+
 	"timed out"+
@@ -983,7 +1037,23 @@ var textsEn = i18n.NewTexts(""+
 	"Guest"+
 	"Browsing as a guest"+
 	"Not signed in"+
-	"Can't connect",
+	"Can't connect"+
+	"OpenList Client · Transfer progress"+
+	"OpenList Client · Transfer summary"+
+	"Dismiss transfer summary"+
+	"Background running"+
+	"Minimize to tray when closing window"+
+	"Keep transfers running in the system tray after closing the main window; click the tray icon to reopen"+
+	"Closing the window will minimize to the system tray"+
+	"Closing the window will quit (confirming if transfers are active)"+
+	"OpenList · No active transfers"+
+	"No active transfers"+
+	"Show window"+
+	"Open transfers"+
+	"Quit OpenList"+
+	"Transfers still in progress"+
+	"Keep transferring"+
+	"Quit app",
 	[]uint16{
 		8,
 		5,
@@ -991,6 +1061,7 @@ var textsEn = i18n.NewTexts(""+
 		8,
 		15,
 		20,
+		10,
 		13,
 		19,
 		7,
@@ -1000,6 +1071,7 @@ var textsEn = i18n.NewTexts(""+
 		12,
 		11,
 		10,
+		21,
 		4,
 		4,
 		4,
@@ -1159,7 +1231,7 @@ var textsEn = i18n.NewTexts(""+
 		21,
 		17,
 		20,
-		101,
+		126,
 		48,
 		21,
 		9,
@@ -1253,6 +1325,22 @@ var textsEn = i18n.NewTexts(""+
 		19,
 		13,
 		13,
+		36,
+		35,
+		24,
+		18,
+		36,
+		102,
+		51,
+		65,
+		31,
+		19,
+		11,
+		14,
+		13,
+		27,
+		17,
+		8,
 	})
 
 // textsZhHans are the messages without arguments in zh-Hans.
@@ -1263,6 +1351,7 @@ var textsZhHans = i18n.NewTexts(""+
 	"设置"+
 	"主导航"+
 	"切换 OpenList 站点"+
+	"+ 添加站点"+
 	"新建或上传"+
 	"刷新当前目录"+
 	"未添加站点"+
@@ -1272,6 +1361,7 @@ var textsZhHans = i18n.NewTexts(""+
 	"搜索范围"+
 	"当前目录"+
 	"全局"+
+	"返回上一级文件夹"+
 	"名称"+
 	"大小"+
 	"时间"+
@@ -1431,7 +1521,7 @@ var textsZhHans = i18n.NewTexts(""+
 	"目录与下载路径"+
 	"存储与关于"+
 	"开启通知"+
-	"上传、下载与离线任务成功或失败时都会发出系统通知；条目太多时自动折叠汇总"+
+	"传输进行中在通知栏显示实时进度，完成或失败时发出提醒；条目太多时自动折叠汇总"+
 	"条目较多已折叠，点击查看传输记录"+
 	"点击查看传输记录"+
 	"超时"+
@@ -1524,7 +1614,23 @@ var textsZhHans = i18n.NewTexts(""+
 	"访客"+
 	"以访客身份浏览"+
 	"未登录"+
-	"无法连接",
+	"无法连接"+
+	"OpenList Client · 传输进度"+
+	"OpenList Client · 传输汇总"+
+	"关闭传输提示"+
+	"后台运行"+
+	"关闭窗口时最小化到托盘"+
+	"关闭主窗口后在系统托盘继续传输；点击托盘图标可重新打开"+
+	"关闭窗口将最小化到系统托盘"+
+	"关闭窗口将直接退出（有活跃传输时先确认）"+
+	"OpenList · 暂无进行中的传输"+
+	"暂无进行中的传输"+
+	"显示主窗口"+
+	"打开传输队列"+
+	"退出 OpenList"+
+	"仍有传输正在进行"+
+	"继续传输"+
+	"退出应用",
 	[]uint16{
 		8,
 		6,
@@ -1532,6 +1638,7 @@ var textsZhHans = i18n.NewTexts(""+
 		6,
 		9,
 		22,
+		14,
 		15,
 		18,
 		15,
@@ -1541,6 +1648,7 @@ var textsZhHans = i18n.NewTexts(""+
 		12,
 		12,
 		6,
+		24,
 		6,
 		6,
 		6,
@@ -1700,7 +1808,7 @@ var textsZhHans = i18n.NewTexts(""+
 		21,
 		15,
 		12,
-		108,
+		114,
 		48,
 		24,
 		6,
@@ -1793,6 +1901,22 @@ var textsZhHans = i18n.NewTexts(""+
 		6,
 		21,
 		9,
+		12,
+		31,
+		31,
+		18,
+		12,
+		33,
+		81,
+		39,
+		60,
+		36,
+		24,
+		15,
+		18,
+		15,
+		24,
+		12,
 		12,
 	})
 
@@ -1937,6 +2061,18 @@ func Supply(lang string, t Translation) {
 	if t.DeleteBatchBody != nil {
 		s.DeleteBatchBody = t.DeleteBatchBody
 	}
+	if t.NotifyProgressDownloadTitle != nil {
+		s.NotifyProgressDownloadTitle = t.NotifyProgressDownloadTitle
+	}
+	if t.NotifyProgressUploadTitle != nil {
+		s.NotifyProgressUploadTitle = t.NotifyProgressUploadTitle
+	}
+	if t.NotifyProgressMultiTitle != nil {
+		s.NotifyProgressMultiTitle = t.NotifyProgressMultiTitle
+	}
+	if t.NotifyProgressMultiBody != nil {
+		s.NotifyProgressMultiBody = t.NotifyProgressMultiBody
+	}
 	if t.NotifyItemDownloadDone != nil {
 		s.NotifyItemDownloadDone = t.NotifyItemDownloadDone
 	}
@@ -2018,6 +2154,18 @@ func Supply(lang string, t Translation) {
 	if t.SiteStatusLine != nil {
 		s.SiteStatusLine = t.SiteStatusLine
 	}
+	if t.TransferBannerSummaryBody != nil {
+		s.TransferBannerSummaryBody = t.TransferBannerSummaryBody
+	}
+	if t.TrayTooltipActive != nil {
+		s.TrayTooltipActive = t.TrayTooltipActive
+	}
+	if t.TrayMenuActive != nil {
+		s.TrayMenuActive = t.TrayMenuActive
+	}
+	if t.QuitConfirmBody != nil {
+		s.QuitConfirmBody = t.QuitConfirmBody
+	}
 	supplied[lang] = s
 	Catalog.Add(lang)
 }
@@ -2074,6 +2222,13 @@ func SiteSwitchLabel(cx *core.Scope) string { return For(cx).SiteSwitchLabel() }
 
 // SiteSwitchLabel is the package's SiteSwitchLabel in the language of msgs.
 func (msgs Messages) SiteSwitchLabel() string { return msgs.text(textSiteSwitchLabel) }
+
+// HeaderAddSite says "+ Add site"
+// in the language the app shows under cx.
+func HeaderAddSite(cx *core.Scope) string { return For(cx).HeaderAddSite() }
+
+// HeaderAddSite is the package's HeaderAddSite in the language of msgs.
+func (msgs Messages) HeaderAddSite() string { return msgs.text(textHeaderAddSite) }
 
 // NewOrUploadLabel says "New or upload"
 // in the language the app shows under cx.
@@ -2137,6 +2292,13 @@ func ScopeGlobal(cx *core.Scope) string { return For(cx).ScopeGlobal() }
 
 // ScopeGlobal is the package's ScopeGlobal in the language of msgs.
 func (msgs Messages) ScopeGlobal() string { return msgs.text(textScopeGlobal) }
+
+// ParentDirLabel says "Back to parent folder"
+// in the language the app shows under cx.
+func ParentDirLabel(cx *core.Scope) string { return For(cx).ParentDirLabel() }
+
+// ParentDirLabel is the package's ParentDirLabel in the language of msgs.
+func (msgs Messages) ParentDirLabel() string { return msgs.text(textParentDirLabel) }
 
 // SortName says "Name"
 // in the language the app shows under cx.
@@ -4048,12 +4210,124 @@ func NotifyMaster(cx *core.Scope) string { return For(cx).NotifyMaster() }
 // NotifyMaster is the package's NotifyMaster in the language of msgs.
 func (msgs Messages) NotifyMaster() string { return msgs.text(textNotifyMaster) }
 
-// NotifyMasterDesc says "System alerts when uploads, downloads or offline tasks succeed or fail; many alerts collapse into one"
+// NotifyMasterDesc says "Live progress in mobile notifications while transferring, and alerts when tasks succeed or fail; many alerts collapse into one"
 // in the language the app shows under cx.
 func NotifyMasterDesc(cx *core.Scope) string { return For(cx).NotifyMasterDesc() }
 
 // NotifyMasterDesc is the package's NotifyMasterDesc in the language of msgs.
 func (msgs Messages) NotifyMasterDesc() string { return msgs.text(textNotifyMasterDesc) }
+
+// NotifyProgressDownloadTitle says "Downloading: {name}"
+// in the language the app shows under cx.
+func NotifyProgressDownloadTitle(cx *core.Scope, name string) string {
+	return For(cx).NotifyProgressDownloadTitle(name)
+}
+
+// NotifyProgressDownloadTitle is the package's NotifyProgressDownloadTitle in the language of msgs.
+func (msgs Messages) NotifyProgressDownloadTitle(name string) string {
+	if i18n.IsPseudo(msgs.lang) {
+		return i18n.Pseudo(msgs.lang, Messages{lang: Source, mark: true}.NotifyProgressDownloadTitle(name))
+	}
+	for lang := msgs.lang; ; lang = i18n.Parent(lang) {
+		if f := supplied[lang].NotifyProgressDownloadTitle; f != nil {
+			return f(name)
+		}
+		switch lang {
+		case "", "en":
+			return "Downloading: " + msgs.arg(name)
+		case "zh-Hans":
+			return "正在下载：" + name
+		}
+	}
+}
+
+// NotifyProgressUploadTitle says "Uploading: {name}"
+// in the language the app shows under cx.
+func NotifyProgressUploadTitle(cx *core.Scope, name string) string {
+	return For(cx).NotifyProgressUploadTitle(name)
+}
+
+// NotifyProgressUploadTitle is the package's NotifyProgressUploadTitle in the language of msgs.
+func (msgs Messages) NotifyProgressUploadTitle(name string) string {
+	if i18n.IsPseudo(msgs.lang) {
+		return i18n.Pseudo(msgs.lang, Messages{lang: Source, mark: true}.NotifyProgressUploadTitle(name))
+	}
+	for lang := msgs.lang; ; lang = i18n.Parent(lang) {
+		if f := supplied[lang].NotifyProgressUploadTitle; f != nil {
+			return f(name)
+		}
+		switch lang {
+		case "", "en":
+			return "Uploading: " + msgs.arg(name)
+		case "zh-Hans":
+			return "正在上传：" + name
+		}
+	}
+}
+
+// NotifyProgressMultiTitle says "{count, plural, one {# transfer in progress} other {# transfers in progress}}"
+// in the language the app shows under cx.
+func NotifyProgressMultiTitle(cx *core.Scope, count int) string {
+	return For(cx).NotifyProgressMultiTitle(count)
+}
+
+// NotifyProgressMultiTitle is the package's NotifyProgressMultiTitle in the language of msgs.
+func (msgs Messages) NotifyProgressMultiTitle(count int) string {
+	if i18n.IsPseudo(msgs.lang) {
+		return i18n.Pseudo(msgs.lang, Messages{lang: Source, mark: true}.NotifyProgressMultiTitle(count))
+	}
+	for lang := msgs.lang; ; lang = i18n.Parent(lang) {
+		if f := supplied[lang].NotifyProgressMultiTitle; f != nil {
+			return f(count)
+		}
+		switch lang {
+		case "", "en":
+			var b strings.Builder
+			switch i18n.Cardinal("en", float64(count)) {
+			case i18n.One:
+				b.WriteString(msgs.arg(i18n.FormatNumber("en", float64(count))))
+				b.WriteString(" transfer in progress")
+			default:
+				b.WriteString(msgs.arg(i18n.FormatNumber("en", float64(count))))
+				b.WriteString(" transfers in progress")
+			}
+			return b.String()
+		case "zh-Hans":
+			var b strings.Builder
+			switch i18n.Cardinal("zh-Hans", float64(count)) {
+			default:
+				b.WriteString("正在进行 ")
+				b.WriteString(i18n.FormatNumber("zh-Hans", float64(count)))
+				b.WriteString(" 个传输任务")
+			}
+			return b.String()
+		}
+	}
+}
+
+// NotifyProgressMultiBody says "{percent}% · {done} / {total}"
+// in the language the app shows under cx.
+func NotifyProgressMultiBody(cx *core.Scope, percent string, done string, total string) string {
+	return For(cx).NotifyProgressMultiBody(percent, done, total)
+}
+
+// NotifyProgressMultiBody is the package's NotifyProgressMultiBody in the language of msgs.
+func (msgs Messages) NotifyProgressMultiBody(percent string, done string, total string) string {
+	if i18n.IsPseudo(msgs.lang) {
+		return i18n.Pseudo(msgs.lang, Messages{lang: Source, mark: true}.NotifyProgressMultiBody(percent, done, total))
+	}
+	for lang := msgs.lang; ; lang = i18n.Parent(lang) {
+		if f := supplied[lang].NotifyProgressMultiBody; f != nil {
+			return f(percent, done, total)
+		}
+		switch lang {
+		case "", "en":
+			return msgs.arg(percent) + "% · " + msgs.arg(done) + " / " + msgs.arg(total)
+		case "zh-Hans":
+			return "已完成 " + percent + "% · " + done + " / " + total
+		}
+	}
+}
 
 // NotifyItemDownloadDone says "Downloaded: {name}"
 // in the language the app shows under cx.
@@ -5412,3 +5686,281 @@ func (msgs Messages) SiteStatusLine(url string, status string) string {
 		}
 	}
 }
+
+// TransferBannerProgressHeading says "OpenList Client · Transfer progress"
+// in the language the app shows under cx.
+func TransferBannerProgressHeading(cx *core.Scope) string {
+	return For(cx).TransferBannerProgressHeading()
+}
+
+// TransferBannerProgressHeading is the package's TransferBannerProgressHeading in the language of msgs.
+func (msgs Messages) TransferBannerProgressHeading() string {
+	return msgs.text(textTransferBannerProgressHeading)
+}
+
+// TransferBannerSummaryHeading says "OpenList Client · Transfer summary"
+// in the language the app shows under cx.
+func TransferBannerSummaryHeading(cx *core.Scope) string {
+	return For(cx).TransferBannerSummaryHeading()
+}
+
+// TransferBannerSummaryHeading is the package's TransferBannerSummaryHeading in the language of msgs.
+func (msgs Messages) TransferBannerSummaryHeading() string {
+	return msgs.text(textTransferBannerSummaryHeading)
+}
+
+// TransferBannerSummaryBody says "Downloaded {downloaded} · Uploaded {uploaded} · Tap to dismiss"
+// in the language the app shows under cx.
+func TransferBannerSummaryBody(cx *core.Scope, downloaded string, uploaded string) string {
+	return For(cx).TransferBannerSummaryBody(downloaded, uploaded)
+}
+
+// TransferBannerSummaryBody is the package's TransferBannerSummaryBody in the language of msgs.
+func (msgs Messages) TransferBannerSummaryBody(downloaded string, uploaded string) string {
+	if i18n.IsPseudo(msgs.lang) {
+		return i18n.Pseudo(msgs.lang, Messages{lang: Source, mark: true}.TransferBannerSummaryBody(downloaded, uploaded))
+	}
+	for lang := msgs.lang; ; lang = i18n.Parent(lang) {
+		if f := supplied[lang].TransferBannerSummaryBody; f != nil {
+			return f(downloaded, uploaded)
+		}
+		switch lang {
+		case "", "en":
+			return "Downloaded " + msgs.arg(downloaded) + " · Uploaded " + msgs.arg(uploaded) + " · Tap to dismiss"
+		case "zh-Hans":
+			return "已下载 " + downloaded + " · 已上传 " + uploaded + " · 点击关闭"
+		}
+	}
+}
+
+// TransferBannerCloseLabel says "Dismiss transfer summary"
+// in the language the app shows under cx.
+func TransferBannerCloseLabel(cx *core.Scope) string { return For(cx).TransferBannerCloseLabel() }
+
+// TransferBannerCloseLabel is the package's TransferBannerCloseLabel in the language of msgs.
+func (msgs Messages) TransferBannerCloseLabel() string {
+	return msgs.text(textTransferBannerCloseLabel)
+}
+
+// GroupDesktop says "Background running"
+// in the language the app shows under cx.
+func GroupDesktop(cx *core.Scope) string { return For(cx).GroupDesktop() }
+
+// GroupDesktop is the package's GroupDesktop in the language of msgs.
+func (msgs Messages) GroupDesktop() string { return msgs.text(textGroupDesktop) }
+
+// CloseToTrayTitle says "Minimize to tray when closing window"
+// in the language the app shows under cx.
+func CloseToTrayTitle(cx *core.Scope) string { return For(cx).CloseToTrayTitle() }
+
+// CloseToTrayTitle is the package's CloseToTrayTitle in the language of msgs.
+func (msgs Messages) CloseToTrayTitle() string { return msgs.text(textCloseToTrayTitle) }
+
+// CloseToTrayDesc says "Keep transfers running in the system tray after closing the main window; click the tray icon to reopen"
+// in the language the app shows under cx.
+func CloseToTrayDesc(cx *core.Scope) string { return For(cx).CloseToTrayDesc() }
+
+// CloseToTrayDesc is the package's CloseToTrayDesc in the language of msgs.
+func (msgs Messages) CloseToTrayDesc() string { return msgs.text(textCloseToTrayDesc) }
+
+// ToastCloseToTrayOn says "Closing the window will minimize to the system tray"
+// in the language the app shows under cx.
+func ToastCloseToTrayOn(cx *core.Scope) string { return For(cx).ToastCloseToTrayOn() }
+
+// ToastCloseToTrayOn is the package's ToastCloseToTrayOn in the language of msgs.
+func (msgs Messages) ToastCloseToTrayOn() string { return msgs.text(textToastCloseToTrayOn) }
+
+// ToastCloseToTrayOff says "Closing the window will quit (confirming if transfers are active)"
+// in the language the app shows under cx.
+func ToastCloseToTrayOff(cx *core.Scope) string { return For(cx).ToastCloseToTrayOff() }
+
+// ToastCloseToTrayOff is the package's ToastCloseToTrayOff in the language of msgs.
+func (msgs Messages) ToastCloseToTrayOff() string { return msgs.text(textToastCloseToTrayOff) }
+
+// TrayTooltipIdle says "OpenList · No active transfers"
+// in the language the app shows under cx.
+func TrayTooltipIdle(cx *core.Scope) string { return For(cx).TrayTooltipIdle() }
+
+// TrayTooltipIdle is the package's TrayTooltipIdle in the language of msgs.
+func (msgs Messages) TrayTooltipIdle() string { return msgs.text(textTrayTooltipIdle) }
+
+// TrayTooltipActive says "{count, plural, one {OpenList · # active transfer} other {OpenList · # active transfers}} ({percent}%)"
+// in the language the app shows under cx.
+func TrayTooltipActive(cx *core.Scope, count int, percent string) string {
+	return For(cx).TrayTooltipActive(count, percent)
+}
+
+// TrayTooltipActive is the package's TrayTooltipActive in the language of msgs.
+func (msgs Messages) TrayTooltipActive(count int, percent string) string {
+	if i18n.IsPseudo(msgs.lang) {
+		return i18n.Pseudo(msgs.lang, Messages{lang: Source, mark: true}.TrayTooltipActive(count, percent))
+	}
+	for lang := msgs.lang; ; lang = i18n.Parent(lang) {
+		if f := supplied[lang].TrayTooltipActive; f != nil {
+			return f(count, percent)
+		}
+		switch lang {
+		case "", "en":
+			var b strings.Builder
+			switch i18n.Cardinal("en", float64(count)) {
+			case i18n.One:
+				b.WriteString("OpenList · ")
+				b.WriteString(msgs.arg(i18n.FormatNumber("en", float64(count))))
+				b.WriteString(" active transfer")
+			default:
+				b.WriteString("OpenList · ")
+				b.WriteString(msgs.arg(i18n.FormatNumber("en", float64(count))))
+				b.WriteString(" active transfers")
+			}
+			b.WriteString(" (")
+			b.WriteString(msgs.arg(percent))
+			b.WriteString("%)")
+			return b.String()
+		case "zh-Hans":
+			var b strings.Builder
+			switch i18n.Cardinal("zh-Hans", float64(count)) {
+			default:
+				b.WriteString("OpenList · 正在传输 ")
+				b.WriteString(i18n.FormatNumber("zh-Hans", float64(count)))
+				b.WriteString(" 个任务")
+			}
+			b.WriteString("（")
+			b.WriteString(percent)
+			b.WriteString("%）")
+			return b.String()
+		}
+	}
+}
+
+// TrayMenuIdle says "No active transfers"
+// in the language the app shows under cx.
+func TrayMenuIdle(cx *core.Scope) string { return For(cx).TrayMenuIdle() }
+
+// TrayMenuIdle is the package's TrayMenuIdle in the language of msgs.
+func (msgs Messages) TrayMenuIdle() string { return msgs.text(textTrayMenuIdle) }
+
+// TrayMenuActive says "{count, plural, one {# active transfer} other {# active transfers}} · {percent}%"
+// in the language the app shows under cx.
+func TrayMenuActive(cx *core.Scope, count int, percent string) string {
+	return For(cx).TrayMenuActive(count, percent)
+}
+
+// TrayMenuActive is the package's TrayMenuActive in the language of msgs.
+func (msgs Messages) TrayMenuActive(count int, percent string) string {
+	if i18n.IsPseudo(msgs.lang) {
+		return i18n.Pseudo(msgs.lang, Messages{lang: Source, mark: true}.TrayMenuActive(count, percent))
+	}
+	for lang := msgs.lang; ; lang = i18n.Parent(lang) {
+		if f := supplied[lang].TrayMenuActive; f != nil {
+			return f(count, percent)
+		}
+		switch lang {
+		case "", "en":
+			var b strings.Builder
+			switch i18n.Cardinal("en", float64(count)) {
+			case i18n.One:
+				b.WriteString(msgs.arg(i18n.FormatNumber("en", float64(count))))
+				b.WriteString(" active transfer")
+			default:
+				b.WriteString(msgs.arg(i18n.FormatNumber("en", float64(count))))
+				b.WriteString(" active transfers")
+			}
+			b.WriteString(" · ")
+			b.WriteString(msgs.arg(percent))
+			b.WriteString("%")
+			return b.String()
+		case "zh-Hans":
+			var b strings.Builder
+			switch i18n.Cardinal("zh-Hans", float64(count)) {
+			default:
+				b.WriteString("正在传输 ")
+				b.WriteString(i18n.FormatNumber("zh-Hans", float64(count)))
+				b.WriteString(" 个任务")
+			}
+			b.WriteString(" · ")
+			b.WriteString(percent)
+			b.WriteString("%")
+			return b.String()
+		}
+	}
+}
+
+// TrayShowWindow says "Show window"
+// in the language the app shows under cx.
+func TrayShowWindow(cx *core.Scope) string { return For(cx).TrayShowWindow() }
+
+// TrayShowWindow is the package's TrayShowWindow in the language of msgs.
+func (msgs Messages) TrayShowWindow() string { return msgs.text(textTrayShowWindow) }
+
+// TrayOpenTransfers says "Open transfers"
+// in the language the app shows under cx.
+func TrayOpenTransfers(cx *core.Scope) string { return For(cx).TrayOpenTransfers() }
+
+// TrayOpenTransfers is the package's TrayOpenTransfers in the language of msgs.
+func (msgs Messages) TrayOpenTransfers() string { return msgs.text(textTrayOpenTransfers) }
+
+// TrayQuit says "Quit OpenList"
+// in the language the app shows under cx.
+func TrayQuit(cx *core.Scope) string { return For(cx).TrayQuit() }
+
+// TrayQuit is the package's TrayQuit in the language of msgs.
+func (msgs Messages) TrayQuit() string { return msgs.text(textTrayQuit) }
+
+// QuitConfirmTitle says "Transfers still in progress"
+// in the language the app shows under cx.
+func QuitConfirmTitle(cx *core.Scope) string { return For(cx).QuitConfirmTitle() }
+
+// QuitConfirmTitle is the package's QuitConfirmTitle in the language of msgs.
+func (msgs Messages) QuitConfirmTitle() string { return msgs.text(textQuitConfirmTitle) }
+
+// QuitConfirmBody says "{count, plural, one {# transfer is still running. Unfinished downloads keep their partial progress and can resume next time.} other {# transfers are still running. Unfinished downloads keep their partial progress and can resume next time.}}"
+// in the language the app shows under cx.
+func QuitConfirmBody(cx *core.Scope, count int) string { return For(cx).QuitConfirmBody(count) }
+
+// QuitConfirmBody is the package's QuitConfirmBody in the language of msgs.
+func (msgs Messages) QuitConfirmBody(count int) string {
+	if i18n.IsPseudo(msgs.lang) {
+		return i18n.Pseudo(msgs.lang, Messages{lang: Source, mark: true}.QuitConfirmBody(count))
+	}
+	for lang := msgs.lang; ; lang = i18n.Parent(lang) {
+		if f := supplied[lang].QuitConfirmBody; f != nil {
+			return f(count)
+		}
+		switch lang {
+		case "", "en":
+			var b strings.Builder
+			switch i18n.Cardinal("en", float64(count)) {
+			case i18n.One:
+				b.WriteString(msgs.arg(i18n.FormatNumber("en", float64(count))))
+				b.WriteString(" transfer is still running. Unfinished downloads keep their partial progress and can resume next time.")
+			default:
+				b.WriteString(msgs.arg(i18n.FormatNumber("en", float64(count))))
+				b.WriteString(" transfers are still running. Unfinished downloads keep their partial progress and can resume next time.")
+			}
+			return b.String()
+		case "zh-Hans":
+			var b strings.Builder
+			switch i18n.Cardinal("zh-Hans", float64(count)) {
+			default:
+				b.WriteString("当前有 ")
+				b.WriteString(i18n.FormatNumber("zh-Hans", float64(count)))
+				b.WriteString(" 个任务正在传输。退出后未完成的下载会保留断点，下次打开时可继续。")
+			}
+			return b.String()
+		}
+	}
+}
+
+// QuitConfirmCancel says "Keep transferring"
+// in the language the app shows under cx.
+func QuitConfirmCancel(cx *core.Scope) string { return For(cx).QuitConfirmCancel() }
+
+// QuitConfirmCancel is the package's QuitConfirmCancel in the language of msgs.
+func (msgs Messages) QuitConfirmCancel() string { return msgs.text(textQuitConfirmCancel) }
+
+// QuitConfirmAction says "Quit app"
+// in the language the app shows under cx.
+func QuitConfirmAction(cx *core.Scope) string { return For(cx).QuitConfirmAction() }
+
+// QuitConfirmAction is the package's QuitConfirmAction in the language of msgs.
+func (msgs Messages) QuitConfirmAction() string { return msgs.text(textQuitConfirmAction) }

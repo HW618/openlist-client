@@ -43,6 +43,9 @@ type Task struct {
 	RemotePath string `json:"remotePath"`
 	// LocalPath is where a download is saved or an upload is read from.
 	LocalPath string `json:"localPath,omitempty"`
+	// Validator stores the HTTP validator (strong ETag or Last-Modified)
+	// associated with an unfinished download so resumes send If-Range safely.
+	Validator string `json:"validator,omitempty"`
 	Total     int64  `json:"total"`
 	Done      int64  `json:"done"`
 	Status    Status `json:"status"`
@@ -75,11 +78,12 @@ type Engine struct {
 	run    func(Task) RunFunc
 	notify func()
 
-	mu      sync.Mutex
-	entries []*entry
-	seq     int
-	running int
-	lastTel time.Time
+	mu         sync.Mutex
+	entries    []*entry
+	seq        int
+	running    int
+	lastTel    time.Time
+	pendingTel bool
 }
 
 type entry struct {
@@ -170,6 +174,21 @@ func (e *Engine) Resume(id string) { e.requeue(id, Paused) }
 
 // Retry queues a failed task again.
 func (e *Engine) Retry(id string) { e.requeue(id, Failed) }
+
+// SetValidator records the HTTP validator (strong ETag or Last-Modified)
+// associated with task id's partial download.
+func (e *Engine) SetValidator(id, validator string) {
+	e.mu.Lock()
+	changed := false
+	if en := e.find(id); en != nil && en.task.Validator != validator {
+		en.task.Validator = validator
+		changed = true
+	}
+	e.mu.Unlock()
+	if changed {
+		e.changed(false)
+	}
+}
 
 func (e *Engine) requeue(id string, from Status) {
 	e.mu.Lock()
@@ -274,7 +293,7 @@ func (e *Engine) work(ctx context.Context, en *entry, t Task, run RunFunc) {
 	if !en.removed {
 		switch {
 		case err == nil:
-			en.task.Status, en.task.Speed = Done, 0
+			en.task.Status, en.task.Speed, en.task.Validator = Done, 0, ""
 			if en.task.Total > 0 {
 				en.task.Done = en.task.Total
 			}
@@ -325,10 +344,28 @@ func (e *Engine) changed(force bool) {
 	}
 	e.mu.Lock()
 	now := time.Now()
-	if !force && now.Sub(e.lastTel) < 150*time.Millisecond {
+	dt := now.Sub(e.lastTel)
+	if !force && dt < 150*time.Millisecond {
+		if !e.pendingTel {
+			e.pendingTel = true
+			e.mu.Unlock()
+			time.AfterFunc(150*time.Millisecond-dt, func() {
+				e.mu.Lock()
+				if !e.pendingTel {
+					e.mu.Unlock()
+					return
+				}
+				e.pendingTel = false
+				e.lastTel = time.Now()
+				e.mu.Unlock()
+				e.notify()
+			})
+			return
+		}
 		e.mu.Unlock()
 		return
 	}
+	e.pendingTel = false
 	e.lastTel = now
 	e.mu.Unlock()
 	e.notify()

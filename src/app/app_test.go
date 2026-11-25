@@ -922,3 +922,119 @@ func TestSheetFooterStaysAboveKeyboard(t *testing.T) {
 		return windowY(btn)+btn.Frame.Size.Height <= keyboardTop && windowY(urls) >= 59
 	})
 }
+
+func TestHeaderAddSiteAndSitesSheetTopAction(t *testing.T) {
+	srv := newFakeServer(t)
+	var sitesList []store.Site
+	for i := 0; i < 12; i++ {
+		sitesList = append(sitesList, store.Site{ID: "s" + itoa(i+1), Name: "Node-" + string(rune('A'+i)), URL: srv.URL})
+	}
+	rawSites, _ := json.Marshal(map[string]any{"version": 1, "value": sitesList})
+	windowY := func(v *nsgotest.View) core.Points {
+		y := v.Frame.Origin.Y
+		for p := v.Parent; p != nil; p = p.Parent {
+			y += p.Frame.Origin.Y - p.Offset.Y
+		}
+		return y
+	}
+
+	for _, tc := range []struct {
+		name      string
+		w, h      core.Points
+		directAdd bool
+	}{
+		{"phone", 390, 844, true},
+		{"desktop", 960, 720, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			app := start(t,
+				nsgotest.Size(tc.w, tc.h),
+				nsgotest.Storage(map[string]string{"sites": string(rawSites), "currentSite": `{"version":1,"value":"s1"}`}),
+			)
+			app.WaitFor("id:header-add-site", 2*time.Second)
+			if tc.directAdd {
+				app.Press("id:header-add-site")
+				app.WaitFor("id:site-url", time.Second)
+				app.Press("role:button Cancel")
+				app.WaitForGone("id:site-url", time.Second)
+			}
+
+			app.Press("id:site-pill")
+			app.WaitFor("id:add-new-site", time.Second)
+			addBtn := app.Find("id:add-new-site")
+			secondRow := app.Find("role:dialog >> text:Node-B")
+			if !(windowY(addBtn) < windowY(secondRow)) {
+				t.Fatalf("%s: add-new-site Y=%v should sit above site list Y=%v without scrolling",
+					tc.name, windowY(addBtn), windowY(secondRow))
+			}
+			app.Press("id:add-new-site")
+			app.WaitFor("id:site-url", time.Second)
+		})
+	}
+}
+
+func TestParentDirButtonNavigatesUpAndDisablesAtRoot(t *testing.T) {
+	srv := newFakeServer(t)
+	app := start(t, seed(srv.URL))
+	app.WaitFor("id:file-Docs", 2*time.Second)
+	if !app.Find("id:parent-dir").Props.Disabled {
+		t.Fatal("parent-dir button should be disabled at root /")
+	}
+
+	app.Press("id:file-Docs")
+	app.WaitFor("id:file-Reports", 2*time.Second)
+	if app.Find("id:parent-dir").Props.Disabled {
+		t.Fatal("parent-dir button should be enabled inside /Docs")
+	}
+
+	app.Press("id:file-Reports")
+	app.WaitFor("text:This folder is empty", 2*time.Second)
+	app.Press("id:parent-dir")
+	app.WaitFor("id:file-notes.txt", 2*time.Second)
+
+	app.Press("id:parent-dir")
+	app.WaitFor("id:file-Media", 2*time.Second)
+	if !app.Find("id:parent-dir").Props.Disabled {
+		t.Fatal("parent-dir button should be disabled again at root /")
+	}
+}
+
+func TestCollapsedDefaultSiteShowsActionsWithoutExpanding(t *testing.T) {
+	srv := newFakeServer(t)
+	sites, _ := json.Marshal(map[string]any{"version": 1, "value": []store.Site{
+		{ID: "s0", Name: "Office", URL: srv.URL},
+		{ID: "s1", Name: "Home", URL: srv.URL},
+	}})
+	secrets := &store.MemorySecrets{}
+	_ = secrets.Set("s1", "good")
+	app := startWith(t, secrets, nsgotest.Storage(map[string]string{
+		"sites": string(sites), "currentSite": `{"version":1,"value":"s1"}`,
+	}))
+	app.Press("id:tab-settings")
+	app.WaitFor("text:Home", time.Second)
+	if app.Exists("text:Office") {
+		t.Fatal("non-active site should stay hidden while collapsed")
+	}
+	app.WaitFor("role:button Test", time.Second)
+	app.WaitFor("role:button Sign out", time.Second)
+	app.WaitFor("role:button Delete", time.Second)
+}
+
+func TestDesktopLocalDirUsesFolderPickerNotTextInput(t *testing.T) {
+	srv := newFakeServer(t)
+	picked := t.TempDir()
+	app := start(t,
+		seed(srv.URL),
+		nsgotest.Size(960, 720),
+		nsgotest.Environment(core.Environment{OS: core.OSMacOS, Idiom: core.IdiomDesktop}),
+	)
+	app.PickDirectories = func(nsgotest.DirectoryPick) []core.Directory {
+		return []core.Directory{{Path: picked}}
+	}
+	app.Press("id:tab-settings")
+	app.WaitFor("id:local-dir-change", time.Second)
+	app.Press("id:local-dir-change")
+	app.WaitUntil(time.Second, func() bool {
+		return len(app.DirectoryPicks) == 1 && slices.Contains(app.Texts(), picked)
+	})
+}

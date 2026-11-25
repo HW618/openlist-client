@@ -90,8 +90,21 @@ func (a *App) siteHeader(cx *core.Scope) core.Node {
 			icon(cx, lucide.ChevronDown, 16, cMuted),
 		},
 	}
+	addSiteBtn := core.View{
+		Role: core.RoleButton, Label: locales.AddSiteAction(cx), TestID: "header-add-site",
+		OnPress:   func(core.PressEvent) { a.openSheet(sheetState{Kind: sheetAddSite}) },
+		Style:     core.Style{Direction: core.Row, AlignItems: core.AlignCenter, Padding: core.Symmetric(6, 10), MinHeight: core.Pt(36), CornerRadius: theme.RadiusPill, BorderWidth: 1, FlexShrink: 0},
+		StyleFunc: func() core.Style { return core.Style{Background: th.Surface(), BorderColor: th.Border()} },
+		Children: []core.Node{
+			oneLine(txt(cx, locales.HeaderAddSite(cx), theme.TypeSmall.Merge(core.Style{FontWeight: ui.Semibold}), cAccent)),
+		},
+	}
+	siteGroup := core.View{
+		Style:    core.Style{Direction: core.Row, AlignItems: core.AlignCenter, Gap: 6, MinWidth: core.Pt(0), FlexShrink: 1},
+		Children: []core.Node{pill, addSiteBtn},
+	}
 	return header(cx,
-		pill, spacer(),
+		siteGroup, spacer(),
 		iconButton(lucide.RefreshCw, locales.RefreshDirLabel(cx), func() {
 			if a.hasSite() {
 				a.refresh(true)
@@ -224,6 +237,20 @@ func (a *App) toolbar(cx *core.Scope) core.Node {
 							core.Style{Padding: core.Symmetric(6, 6), MinHeight: core.Pt(32), AlignItems: core.AlignCenter, JustifyContent: core.JustifyCenter},
 							nil, label))
 					})}}}}
+	atRoot := func() bool { return !a.hasSite() || a.path.Get() == "/" }
+	upBtn := ui.IconButton{
+		Icon:     lucide.CornerLeftUp,
+		Label:    locales.ParentDirLabel(cx),
+		TestID:   "parent-dir",
+		Disabled: atRoot,
+		Size:     32,
+		IconSize: 16,
+		OnPress: func() {
+			if !atRoot() {
+				a.goUp()
+			}
+		},
+	}
 	sortName := func() string {
 		switch a.sortKey.Get() {
 		case store.SortSize:
@@ -258,7 +285,7 @@ func (a *App) toolbar(cx *core.Scope) core.Node {
 		})
 	}}
 	return core.View{Style: core.Style{Direction: core.Row, AlignItems: core.AlignCenter, Gap: 4, Padding: core.Symmetric(0, theme.Space4)},
-		Children: []core.Node{crumbs, sortBtn, dir, views}}
+		Children: []core.Node{crumbs, upBtn, sortBtn, dir, views}}
 }
 
 // metaLine says how many items there are and which driver serves them.

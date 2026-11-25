@@ -89,6 +89,24 @@ type Prefs struct {
 	// Notifications are task-completion notification toggles. When Set is
 	// false (older prefs or a first run), Master/Success/Failure default on.
 	Notifications NotifyPrefs `json:"notifications,omitempty"`
+	// Desktop holds desktop-only background/tray preferences.
+	Desktop DesktopPrefs `json:"desktop,omitempty"`
+}
+
+// DesktopPrefs holds desktop-only background/tray preferences. When Set is
+// false (older prefs or a first run), CloseToTray defaults to true.
+type DesktopPrefs struct {
+	Set         bool `json:"set,omitempty"`
+	CloseToTray bool `json:"closeToTray"`
+}
+
+// CloseToTray reports whether closing the main desktop window minimizes it
+// to the system tray instead of quitting (default true).
+func (p Prefs) CloseToTray() bool {
+	if !p.Desktop.Set {
+		return true
+	}
+	return p.Desktop.CloseToTray
 }
 
 // NotifyPrefs are whether the app shows system notifications for transfers

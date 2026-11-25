@@ -220,6 +220,12 @@ func hairline(cx *core.Scope) core.Node {
 // sheetFrame is a panel with a title, a body and a row of actions: a bottom
 // sheet on a narrow window and a centered dialog on a wide one.
 func (a *App) sheetFrame(title string, body []core.Node, footer []core.Node) core.Node {
+	return a.sheetFrameWithAction(title, nil, body, footer)
+}
+
+// sheetFrameWithAction is sheetFrame with an optional pinned action shown in
+// the sheet header (or directly above the scrolling body on wide dialogs).
+func (a *App) sheetFrameWithAction(title string, headAction core.Node, body []core.Node, footer []core.Node) core.Node {
 	cx := a.cx
 	wide := false
 	cx.Untrack(func() { wide = cx.Env().Window().Width >= theme.DialogBreakpoint })
@@ -283,7 +289,15 @@ func (a *App) sheetFrame(title string, body []core.Node, footer []core.Node) cor
 		}},
 	}
 	if wide {
-		pad := core.View{Style: core.Style{PaddingEnv: core.EnvEdges{Bottom: core.EnvKeyboard}}, Children: []core.Node{scroll}}
+		padKids := make([]core.Node, 0, 2)
+		if headAction != nil {
+			padKids = append(padKids, core.View{
+				Style:    core.Style{Direction: core.Row, JustifyContent: core.JustifyEnd, AlignItems: core.AlignCenter},
+				Children: []core.Node{headAction},
+			})
+		}
+		padKids = append(padKids, scroll)
+		pad := core.View{Style: core.Style{Gap: 10, PaddingEnv: core.EnvEdges{Bottom: core.EnvKeyboard}}, Children: padKids}
 		return ui.Dialog{Open: open, Title: title, OnClose: a.closeSheet,
 			OnOpenChange: func(o bool, _ base.Reason) {
 				if !o {
@@ -293,13 +307,17 @@ func (a *App) sheetFrame(title string, body []core.Node, footer []core.Node) cor
 			Children: []core.Node{pad}, Footer: footer, Style: core.Style{MaxWidth: core.Pt(480), Width: core.Pct(90)}}
 	}
 	dismiss := func(core.PressEvent) { cx.DismissKeyboard() }
+	headKids := []core.Node{
+		core.View{Style: fillStyle, Children: []core.Node{txt(cx, title, theme.TypeSheet, cText)}},
+	}
+	if headAction != nil {
+		headKids = append(headKids, headAction)
+	}
+	headKids = append(headKids, iconButton(lucide.X, locales.CloseSheetLabel(cx), a.closeSheet))
 	head := core.View{
 		OnPress: dismiss, NoFocus: true, ImportantForAccessibility: core.ImportantNo,
-		Style: core.Style{Direction: core.Row, AlignItems: core.AlignCenter, Gap: 8},
-		Children: []core.Node{
-			core.View{Style: fillStyle, Children: []core.Node{txt(cx, title, theme.TypeSheet, cText)}},
-			iconButton(lucide.X, locales.CloseSheetLabel(cx), a.closeSheet),
-		},
+		Style:    core.Style{Direction: core.Row, AlignItems: core.AlignCenter, Gap: 8},
+		Children: headKids,
 	}
 	kids := []core.Node{head, scroll}
 	if len(footer) > 0 {

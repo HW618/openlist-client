@@ -8,6 +8,13 @@ version: 0.1.0
 i18n:
   dir: src/locales
 
+# Custom URL scheme for deep links (e.g. tapping a mobile Live Activity / Live Update).
+url_schemes: [openlist]
+
+# Mobile Live Activities (iOS Lock Screen / Dynamic Island, Android Live Updates / ongoing progress).
+live_activities:
+  enabled: true
+
 # macOS and iOS use an .icon or, on macOS, an .icns; the other targets, and
 # Apple ones without those, use a square PNG. Ours live in design/icon. An Apple
 # TV's icon is a wide layered card and an Apple Watch's is drawn in circles,
@@ -33,7 +40,7 @@ android:
   # Saving in the shared Download folders, and not only through the save dialog,
   # needs the user to allow "All files access" for the app in System settings.
   # POST_NOTIFICATIONS (Android 13+) is required for task completion notifications
-  # (ROADMAP §1); kept here so the manifest is ready once that feature ships.
+  # and transfer progress notifications.
   permissions: [MANAGE_EXTERNAL_STORAGE, WRITE_EXTERNAL_STORAGE, POST_NOTIFICATIONS]
 
 # Android release signing (ROADMAP §0). Do not put passwords in this file.

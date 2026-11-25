@@ -8,11 +8,11 @@
 
 ## 功能
 
-- 多服务器管理，每个服务器有自己的文件夹和下载设置
-- 目录浏览：面包屑导航、排序、列表和网格视图
+- 多服务器管理，每个服务器有自己的文件夹和下载设置；顶栏站点切换旁及实例切换面板顶部提供快捷 `+ 添加站点` 入口
+- 目录浏览：面包屑导航、返回上一级目录按钮、排序、列表和网格视图
 - 搜索：在当前文件夹下搜索，或搜索整个服务器
 - 多选，批量移动和删除；悬浮菜单用于新建文件夹和文件
-- 上传和下载队列
+- 上传和下载队列（全部下载与上传均在 Go 传输引擎中运行，支持 HTTP `Range` 断点续传与失败/停滞自动重试；进行中的任务在 Android 上通过 OpenList 自己的单条静音进度通知展示，iOS 使用灵动岛实况活动，桌面端则在图标上显示总进度并提供系统托盘状态菜单、关闭窗口最小化到托盘继续传输及活跃传输退出确认；「传输」页顶部展示可点击关闭的传输汇总/进度卡片）
 - 离线下载及其进度
 - 传输或离线任务完成/失败时的系统通知（设置里可开关，条目过多时自动折叠汇总；首次启动会引导开启权限）
 - 文件预览：图片、视频、音频、文本
@@ -32,20 +32,22 @@
 
 令牌只会发送给服务器自己的主机；服务器使用 `https` 访问时，不会通过明文 `http` 发送。应用 ID（`nsgo.yaml` 中的 `io.github.hw618.openlistclient`）同时也是安全存储的 service 名；此前使用 `dev.nsgo.openlistclient` 保存的令牌会在启动时复制到新 service（桌面端钥匙串）。安卓上更换包名会变成另一个应用，旧 Keystore 中的令牌无法随之迁移。
 
-## 下载
+## 下载与后台传输
 
 文件默认保存到系统的「下载」文件夹下的 `OpenList` 子文件夹，每个服务器也可以使用自己的文件夹。在浏览器里，文件会交给浏览器下载，或写入你授权访问的文件夹（大文件需要选择这个文件夹）。
+
+在所有原生平台上，下载与上传均由 Go 传输引擎执行（`transfer.FetchResumable` 配合 `.part` 临时文件与 HTTP `Range` 请求），遇到网络断开或连接停滞时会自动重试，并在重试、暂停、后台中断以及应用重启后从已保存的字节偏移量继续（Android 系统保存对话框模式同样保留暂存的 `.part` 进度）。开启通知且有任务进行时，Android 仅在 OpenList 应用自身名下显示一条静音实时进度通知并在完成或失败时发出提醒（不再显示系统下载器或重复的实况卡片，点击可回到「传输」页），iOS 则在锁屏/灵动岛展示实时活动，桌面端通过 Dock/任务栏图标显示总进度，并提供系统托盘图标与菜单（显示实时传输状态、恢复窗口、打开传输队列、退出），默认在设置中开启「关闭窗口时最小化到托盘」并在仍有活跃传输尝试退出时弹出确认框。需要说明的是，由于缺少面向 Go 工作协程的原生后台保活服务，移动端切到后台后系统仍可能限制网络或挂起进程；不过已下载的 `.part` 进度会持续落盘保存，切回应用或恢复网络连接时会自动从断点继续下载。
 
 ## 目录结构
 
 | 路径 | 内容 |
 | --- | --- |
-| `main.go` | 入口：运行 `app.Root` |
+| `main.go` | 入口：运行 `app.Run` |
 | `README.md`、`README.zh-CN.md` | 英文和中文说明，两个文件需要同步更新 |
 | `ROADMAP.md` | 后续计划及其可行性评估 |
 | `AGENTS.md` | 在本仓库工作的 AI 助手和贡献者需要遵守的规则 |
 | `nsgo.yaml` | 应用名称、ID、版本、图标、语言目录和构建目标（NSGo 要求它放在模块根目录） |
-| `src/app/` | 应用本体：窗口与导航、状态、文件、传输、设置、弹层、预览、权限，以及界面测试 |
+| `src/app/` | 应用本体：窗口与导航、状态、文件、传输、设置、弹层、桌面托盘、预览、权限，以及界面测试 |
 | `src/internal/openlist/` | OpenList HTTP API 客户端 |
 | `src/internal/browse/` | 排序、过滤、搜索爬取和悬浮菜单定位 |
 | `src/internal/store/` | 站点、设置和令牌的存放 |
@@ -55,6 +57,7 @@
 | `src/theme/` | 主题（`openlist.yaml`）及其加载器 |
 | `.github/workflows/` | `ci.yml`（PR/`dev` 检查）和 `release.yml`（发布 release 时构建） |
 | `design/prototype/` | 应用的 Open Design HTML 原型 |
+| `design/opendesign/` | 可复用的 OpenDesign 项目快照（`openlist-client-v0.1.0`）与元数据 |
 | `design/icon/` | 应用图标源文件，以及制作图标所用的 OpenList 标志 |
 
 界面有改动时，请让原型与应用保持一致；原型文件头部写明了每个界面对应哪个源文件。
@@ -74,7 +77,7 @@ go tool nsgo build -target macos_arm64   # 只构建一个目标；加 -installe
 
 请使用 `go tool nsgo` 命令，而不要直接用 `go build` 或 `go test`：它们会做类型检查、生成语言目录，并对所有目标做 vet。
 
-原型是单个文件：用浏览器打开 `design/prototype/index-v0.0.1.html`（参数：`?platform=desktop|web|android`，`?perm=folder,network,server,browser,keychain,notifications`，`?notify=1` 可演示一条任务完成通知）。
+原型是单个文件：用浏览器打开 `design/prototype/index-v0.1.0.html`（参数：`?platform=desktop|ios|android|web`，`?perm=folder,network,server,browser,keychain,notifications`，`?notify=1` 可演示折叠汇总传输通知（仅在传输页显示），`?notify=progress` 可演示实时传输进度通知（仅在传输页显示），`?tray=1` 可演示桌面托盘菜单，`?quit=1` 可演示活跃传输退出确认）。
 
 向 `dev` 的推送和针对它的 PR 会运行 [`.github/workflows/ci.yml`](.github/workflows/ci.yml)：`go tool nsgo test`、`go tool nsgo check`，以及对 Windows、js/wasm、Linux（关闭 cgo）的 `go vet`，与 [AGENTS.md](AGENTS.md) §4.1 一致。
 
