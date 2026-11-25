@@ -311,7 +311,7 @@ func (a *App) offlineCard(cx *core.Scope, task func() openlist.OfflineTask) core
 		return c.Muted()
 	}
 	bar := core.Show{When: func() bool { return !task().Finished() }, Then: func(cx *core.Scope) core.Node {
-		return ui.Progress{Value: func() float32 { return float32(task().Progress) / 100 }, Label: title}
+		return ui.Progress{Value: func() float32 { return float32(task().Progress) }, Label: title}
 	}}
 	act := func(svg func() *core.SVG, label, action string) core.Node {
 		return ui.IconButton{Icon: svg, Label: label, OnPress: func() { a.offlineAction(task(), action) }, Size: 36, IconSize: 18}

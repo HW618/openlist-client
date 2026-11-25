@@ -197,7 +197,7 @@ func (a *App) taskCard(cx *core.Scope, task func() transfer.Task) core.Node {
 		return c.Muted()
 	}
 	bar := core.Show{When: func() bool { s := task().Status; return s == transfer.Active || s == transfer.Paused }, Then: func(cx *core.Scope) core.Node {
-		return ui.Progress{Value: func() float32 { return float32(task().Percent()) / 100 }, Label: t0.Name}
+		return ui.Progress{Value: func() float32 { return float32(task().Percent()) }, Label: t0.Name}
 	}}
 	act := func(svg func() *core.SVG, label string, run func()) core.Node {
 		return ui.IconButton{Icon: svg, Label: label, OnPress: run, Size: 36, IconSize: 18}

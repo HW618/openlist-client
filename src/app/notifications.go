@@ -761,12 +761,16 @@ func (a *App) syncTransferBanner(snap []transfer.Task) {
 		a.transferBanner.Set(transferBannerState{})
 		return
 	}
-	activeNow, sig, title, body, status, _, _, progress, showProgress := a.buildProgressSummary(snap)
+	activeNow, sig, title, body, status, _, pct, _, showProgress := a.buildProgressSummary(snap)
 	if activeNow {
 		progSig := "prog:" + sig
 		if a.bannerDismissedSig == progSig {
 			a.transferBanner.Set(transferBannerState{})
 			return
+		}
+		bannerProgress := float32(0)
+		if showProgress && pct >= 0 {
+			bannerProgress = float32(pct)
 		}
 		a.transferBanner.Set(transferBannerState{
 			Visible:      true,
@@ -775,7 +779,8 @@ func (a *App) syncTransferBanner(snap []transfer.Task) {
 			Status:       status,
 			Title:        title,
 			Body:         body,
-			Progress:     float32(progress),
+			// ui.Progress expects 0–100; Live Activity keeps the 0–1 fraction.
+			Progress:     bannerProgress,
 			ShowProgress: showProgress,
 		})
 		return

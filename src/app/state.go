@@ -139,6 +139,7 @@ type transferBannerState struct {
 	Status       string
 	Title        string
 	Body         string
+	// Progress is 0–100 for ui.Progress (not the Live Activity 0–1 fraction).
 	Progress     float32
 	ShowProgress bool
 }
