@@ -63,13 +63,19 @@ jobs:
       #   NSGO_KEY_PASSWORD        — key password (often the same as the keystore)
       #   ANDROID_KEY_ALIAS        — optional; defaults to openlist
       # Never commit the keystore or passwords; *.p12 / *.jks are gitignored.
+      # Do not use `secrets.*` in `if:` — GitHub rejects that and the whole
+      # workflow fails to load (no release builds). Check the env value in the shell.
       - name: Android release keystore
         id: android_sign
-        if: matrix.target == 'android_arm64' && secrets.ANDROID_KEYSTORE_BASE64 != ''
+        if: matrix.target == 'android_arm64'
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
         run: |
+          if [ -z "$ANDROID_KEYSTORE_BASE64" ]; then
+            echo "ANDROID_KEYSTORE_BASE64 is unset; the APK will use the debug key."
+            exit 0
+          fi
           mkdir -p .nsgo
           printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 -d > .nsgo/android-release.p12
           alias="${ANDROID_KEY_ALIAS:-openlist}"
