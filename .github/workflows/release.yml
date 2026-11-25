@@ -1,7 +1,7 @@
 name: Release
 
 # Builds the clients when a release is published, and adds them to it.
-# Tag the release v<version>, the version in nsgo.yaml: v0.1.0 for version 0.1.0.
+# Tag the release v<version>, the version in nsgo.yaml: v0.2.0 for version 0.2.0.
 on:
   release:
     types: [published]

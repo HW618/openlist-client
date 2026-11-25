@@ -4,7 +4,7 @@
 
 A lightweight, cross-platform client for [OpenList](https://github.com/OpenListTeam/OpenList), written in Go with [NSGo](https://nsgo.dev/). It draws with each platform's own native views, in light and dark appearance, with Simplified Chinese and English.
 
-> Status: early (v0.1.0). `go tool nsgo build` packages macOS (arm64), Windows (x64), the iOS simulator, Android (arm64) and the web; the code also supports Linux.
+> Status: early (v0.2.0). `go tool nsgo build` packages macOS (arm64), Windows (x64), the iOS simulator, Android (arm64) and the web; the code also supports Linux.
 
 ## Features
 
@@ -49,7 +49,7 @@ On all native targets, downloads and uploads run inside the Go transfer engine (
 | `src/theme/` | The theme (`openlist.yaml`) and its loader |
 | `.github/workflows/` | `ci.yml` (PR/`dev` checks) and `release.yml` (builds when a release is published) |
 | `design/prototype/` | The Open Design HTML prototype of the app |
-| `design/opendesign/` | Reusable OpenDesign project snapshot (`openlist-client-v0.1.0`) and metadata |
+| `design/opendesign/` | Reusable OpenDesign project snapshot (`openlist-client-v0.2.0`) and metadata |
 | `design/icon/` | App icon sources and the OpenList logo it is made from |
 
 Keep the prototype in step with the app when the UI changes; its header says which source file each screen matches.
@@ -69,7 +69,7 @@ go tool nsgo build -target macos_arm64   # one target; add -installers=false to 
 
 Run the `go tool nsgo` commands rather than `go build` or `go test` directly: they type-check, generate the locale catalogs and vet every target.
 
-The prototype is a single file: open `design/prototype/index-v0.1.0.html` in a browser (`?platform=desktop|ios|android|web`, `?perm=folder,network,server,browser,keychain,notifications`, `?notify=1` for a collapsed transfer summary notice shown in the Transfers tab, `?notify=progress` for a demo live transfer progress notice shown in the Transfers tab, `?tray=1` for the desktop tray menu, `?quit=1` for the active-transfer quit dialog).
+The prototype is a single file: open `design/prototype/index-v0.2.0.html` in a browser (`?platform=desktop|ios|android|web`, `?perm=folder,network,server,browser,keychain,notifications`, `?notify=1` for a collapsed transfer summary notice shown in the Transfers tab, `?notify=progress` for a demo live transfer progress notice shown in the Transfers tab, `?tray=1` for the desktop tray menu, `?quit=1` for the active-transfer quit dialog).
 
 Pull requests and pushes to `dev` run [`.github/workflows/ci.yml`](.github/workflows/ci.yml): `go tool nsgo test`, `go tool nsgo check`, and `go vet` for Windows, js/wasm, and Linux (no cgo), matching [AGENTS.md](AGENTS.md) §4.1.
 
@@ -85,7 +85,7 @@ Publishing a release on GitHub runs [`.github/workflows/release.yml`](.github/wo
 | Linux (arm64) | `.deb`, `.pkg.tar.gz`, `.AppImage` | InstaBox |
 | macOS (arm64, x64) | `.dmg` | GitHub's `macos-latest` runner: macOS packaging needs Xcode, which InstaBox's Linux machines do not have |
 
-To release: set `version` in `nsgo.yaml`, then publish a release tagged `v<version>` (version `0.1.0` is tag `v0.1.0`); the workflow stops if they differ. macOS and Windows may warn on first start until they use a developer or store certificate.
+To release: set `version` in `nsgo.yaml`, then publish a release tagged `v<version>` (version `0.2.0` is tag `v0.2.0`); the workflow stops if they differ. macOS and Windows may warn on first start until they use a developer or store certificate.
 
 ### Android release signing (optional until secrets are set)
 

@@ -4,7 +4,7 @@
 
 [OpenList](https://github.com/OpenListTeam/OpenList) 的轻量级跨平台客户端，使用 Go 和 [NSGo](https://nsgo.dev/) 编写。界面由各平台自己的原生视图绘制，支持浅色和深色外观，支持简体中文和英文。
 
-> 状态：早期版本（v0.1.0）。`go tool nsgo build` 可打包 macOS（arm64）、Windows（x64）、iOS 模拟器、Android（arm64）和网页版；代码同时支持 Linux。
+> 状态：早期版本（v0.2.0）。`go tool nsgo build` 可打包 macOS（arm64）、Windows（x64）、iOS 模拟器、Android（arm64）和网页版；代码同时支持 Linux。
 
 ## 功能
 
@@ -57,7 +57,7 @@
 | `src/theme/` | 主题（`openlist.yaml`）及其加载器 |
 | `.github/workflows/` | `ci.yml`（PR/`dev` 检查）和 `release.yml`（发布 release 时构建） |
 | `design/prototype/` | 应用的 Open Design HTML 原型 |
-| `design/opendesign/` | 可复用的 OpenDesign 项目快照（`openlist-client-v0.1.0`）与元数据 |
+| `design/opendesign/` | 可复用的 OpenDesign 项目快照（`openlist-client-v0.2.0`）与元数据 |
 | `design/icon/` | 应用图标源文件，以及制作图标所用的 OpenList 标志 |
 
 界面有改动时，请让原型与应用保持一致；原型文件头部写明了每个界面对应哪个源文件。
@@ -77,7 +77,7 @@ go tool nsgo build -target macos_arm64   # 只构建一个目标；加 -installe
 
 请使用 `go tool nsgo` 命令，而不要直接用 `go build` 或 `go test`：它们会做类型检查、生成语言目录，并对所有目标做 vet。
 
-原型是单个文件：用浏览器打开 `design/prototype/index-v0.1.0.html`（参数：`?platform=desktop|ios|android|web`，`?perm=folder,network,server,browser,keychain,notifications`，`?notify=1` 可演示折叠汇总传输通知（仅在传输页显示），`?notify=progress` 可演示实时传输进度通知（仅在传输页显示），`?tray=1` 可演示桌面托盘菜单，`?quit=1` 可演示活跃传输退出确认）。
+原型是单个文件：用浏览器打开 `design/prototype/index-v0.2.0.html`（参数：`?platform=desktop|ios|android|web`，`?perm=folder,network,server,browser,keychain,notifications`，`?notify=1` 可演示折叠汇总传输通知（仅在传输页显示），`?notify=progress` 可演示实时传输进度通知（仅在传输页显示），`?tray=1` 可演示桌面托盘菜单，`?quit=1` 可演示活跃传输退出确认）。
 
 向 `dev` 的推送和针对它的 PR 会运行 [`.github/workflows/ci.yml`](.github/workflows/ci.yml)：`go tool nsgo test`、`go tool nsgo check`，以及对 Windows、js/wasm、Linux（关闭 cgo）的 `go vet`，与 [AGENTS.md](AGENTS.md) §4.1 一致。
 
@@ -93,7 +93,7 @@ go tool nsgo build -target macos_arm64   # 只构建一个目标；加 -installe
 | Linux（arm64） | `.deb`、`.pkg.tar.gz`、`.AppImage` | InstaBox |
 | macOS（arm64、x64） | `.dmg` | GitHub 的 `macos-latest` 运行器：macOS 打包需要 Xcode，而 InstaBox 的 Linux 机器没有 |
 
-发布步骤：先修改 `nsgo.yaml` 里的 `version`，再发布标签为 `v<版本号>` 的 release（版本 `0.1.0` 对应标签 `v0.1.0`）；两者不一致时工作流会停止。在配好开发者或商店证书之前，macOS 和 Windows 首次启动时可能出现安全提示。
+发布步骤：先修改 `nsgo.yaml` 里的 `version`，再发布标签为 `v<版本号>` 的 release（版本 `0.2.0` 对应标签 `v0.2.0`）；两者不一致时工作流会停止。在配好开发者或商店证书之前，macOS 和 Windows 首次启动时可能出现安全提示。
 
 ### Android 正式签名（未配置密钥时仍用调试密钥）
 

@@ -2,7 +2,7 @@ name: openlist-client
 # App ID is also the Secrets service name, Android package name and iOS Bundle ID.
 # Tokens under the previous ID (dev.nsgo.openlistclient) are migrated on launch.
 id: io.github.hw618.openlistclient
-version: 0.1.0
+version: 0.2.0
 
 # The language catalogs, relative to this file.
 i18n:

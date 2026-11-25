@@ -14,7 +14,7 @@ import (
 )
 
 // appVersion is the version of the app, as nsgo.yaml says.
-const appVersion = "0.1.0"
+const appVersion = "0.2.0"
 
 // sitesMaxHeight is how tall the expanded site list gets before it scrolls.
 const sitesMaxHeight = 320
